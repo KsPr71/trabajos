@@ -1,9 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/providers/theme-provider';
 
 export default function TrabajosScreen() {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const styles = createStyles(colors);
 
   return (
@@ -14,6 +17,13 @@ export default function TrabajosScreen() {
           Aqui conectaremos tu lista de trabajos desde Supabase (tabla `trabajos`).
         </Text>
       </View>
+
+      <Pressable
+        accessibilityLabel="Crear nuevo trabajo"
+        onPress={() => router.push('/(app)/nuevo-trabajo')}
+        style={styles.fabWrap}>
+        <Ionicons name="add" size={24} color={colors.buttonText} />
+      </Pressable>
     </View>
   );
 }
@@ -42,6 +52,22 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       color: colors.textSecondary,
       lineHeight: 22,
       fontSize: 15,
+    },
+    fabWrap: {
+      position: 'absolute',
+      right: 20,
+      bottom: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 9999,
+      backgroundColor: colors.buttonBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.22,
+      shadowRadius: 8,
+      elevation: 5,
     },
   });
 }

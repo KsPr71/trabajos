@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
-type ThemeMode = 'dark' | 'light';
+export type ThemeMode = 'dark' | 'light';
 
-type ThemeColors = {
+export type ThemeColors = {
   background: string;
   card: string;
   border: string;
