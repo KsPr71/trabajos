@@ -2,6 +2,7 @@ import {
   DrawerContentScrollView,
   DrawerItemList,
 } from "@react-navigation/drawer";
+import { Ionicons } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
@@ -54,17 +55,41 @@ export default function AppLayout() {
               },
             ]}
           >
-            <Text style={[styles.welcomeTitle, { color: colors.textPrimary }]}>
-              Bienvenido
-            </Text>
-            <Text
-              style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}
-            >
-              {session.user.email ?? "usuario"}
-            </Text>
+            <View style={styles.welcomeRow}>
+              <View style={styles.welcomeTextBlock}>
+                <Text style={[styles.welcomeTitle, { color: colors.textPrimary }]}>
+                  Bienvenido
+                </Text>
+                <Text
+                  style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}
+                >
+                  {session.user.email ?? "usuario"}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.avatarWrap,
+                  {
+                    backgroundColor: colors.badgeBg,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Ionicons name="person" size={22} color={colors.badgeText} />
+              </View>
+            </View>
           </View>
-
-          <DrawerItemList {...props} />
+          <View
+            style={[
+              styles.contenedorMenu,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <DrawerItemList {...props} />
+          </View>
         </DrawerContentScrollView>
       )}
       screenOptions={({ route }) => ({
@@ -76,14 +101,51 @@ export default function AppLayout() {
         drawerInactiveTintColor: colors.drawerInactiveText,
         title: drawerLabels[route.name] ?? route.name,
         drawerLabel: drawerLabels[route.name] ?? route.name,
+        drawerIcon: ({ color, size }) => (
+          <Ionicons name={getDrawerIcon(route.name)} size={size} color={color} />
+        ),
         drawerItemStyle:
           route.name === "nuevo-trabajo" || route.name === "editar-trabajo"
             ? { display: "none" }
-            : undefined,
+            : styles.drawerItem,
         headerShown: route.name !== "(tabs)",
       })}
     />
   );
+}
+
+function getDrawerIcon(routeName: string): keyof typeof Ionicons.glyphMap {
+  if (routeName === "(tabs)") {
+    return "home-outline";
+  }
+  if (routeName === "perfil") {
+    return "person-outline";
+  }
+  if (routeName === "clientes") {
+    return "people-outline";
+  }
+  if (routeName === "tipo-trabajo") {
+    return "pricetags-outline";
+  }
+  if (routeName === "especialidad") {
+    return "school-outline";
+  }
+  if (routeName === "institucion") {
+    return "business-outline";
+  }
+  if (routeName === "ajustes") {
+    return "settings-outline";
+  }
+  if (routeName === "trabajos-entregados") {
+    return "checkmark-done-outline";
+  }
+  if (routeName === "nuevo-trabajo") {
+    return "add-circle-outline";
+  }
+  if (routeName === "editar-trabajo") {
+    return "create-outline";
+  }
+  return "ellipse-outline";
 }
 
 const styles = StyleSheet.create({
@@ -103,6 +165,32 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 14,
+  },
+  welcomeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  welcomeTextBlock: {
+    flex: 1,
+  },
+  avatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contenedorMenu: {
+    padding: 25,
+    borderWidth: 2,
+    borderRadius: 16,
+  },
+  drawerItem: {
+    borderRadius: 16,
+    marginVertical: 4,
   },
   welcomeTitle: {
     fontSize: 18,

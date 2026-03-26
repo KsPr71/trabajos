@@ -67,6 +67,11 @@ export default function TrabajosScreen() {
     );
   }, [searchText, trabajos]);
 
+  const hasTrabajosPorTerminarEstaSemana = useMemo(
+    () => trabajos.some((item) => isTrabajoPorTerminarEstaSemana(item)),
+    [trabajos],
+  );
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -154,6 +159,15 @@ export default function TrabajosScreen() {
 
   return (
     <View style={styles.container}>
+      {!loading && !errorMessage && hasTrabajosPorTerminarEstaSemana ? (
+        <View style={styles.alertBanner}>
+          <Ionicons name="alert-circle-outline" size={18} color="#FFFFFF" />
+          <Text style={styles.alertBannerText}>
+            Hay trabajos por terminar esta semana
+          </Text>
+        </View>
+      ) : null}
+
       {loading ? (
         <View style={styles.stateCard}>
           <ActivityIndicator color={colors.buttonBg} />
@@ -192,6 +206,7 @@ export default function TrabajosScreen() {
                   fechaEntrega={item.fechaEntrega}
                   estado={item.estado}
                   accentBorder
+                  showEntregaAlertChip={isTrabajoPorTerminarEstaSemana(item)}
                   onPress={() =>
                     router.push({
                       pathname: "/(app)/editar-trabajo",
@@ -292,6 +307,24 @@ function createStyles(colors: ThemeColors) {
       alignItems: "flex-end",
       justifyContent: "center",
     },
+    alertBanner: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#991B1B",
+      backgroundColor: "#DC2626",
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    alertBannerText: {
+      color: "#FFFFFF",
+      fontSize: 13,
+      fontWeight: "700",
+      flex: 1,
+    },
     stateCard: {
       backgroundColor: colors.card,
       borderColor: colors.border,
@@ -346,4 +379,36 @@ function formatDateTime(isoDate: string) {
   const hour = String(date.getHours()).padStart(2, "0");
   const minute = String(date.getMinutes()).padStart(2, "0");
   return `${day}/${month}/${year} ${hour}:${minute}`;
+}
+
+function isTrabajoPorTerminarEstaSemana(item: TrabajoItem) {
+  if (item.estado === "terminado" || item.estado === "entregado") {
+    return false;
+  }
+  if (!item.fechaEntrega) {
+    return false;
+  }
+
+  const fechaEntrega = parseDateISO(item.fechaEntrega);
+  if (!fechaEntrega) {
+    return false;
+  }
+
+  const hoy = startOfDay(new Date());
+  const diffMs = fechaEntrega.getTime() - hoy.getTime();
+  const diffDays = Math.ceil(diffMs / 86400000);
+
+  return diffDays <= 7 && diffDays >= 0;
+}
+
+function parseDateISO(value: string) {
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }

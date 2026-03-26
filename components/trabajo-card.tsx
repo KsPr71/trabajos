@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ThemeColors, useAppTheme } from "@/providers/theme-provider";
@@ -17,6 +18,7 @@ type TrabajoCardProps = {
   estado: TrabajoCardEstado;
   onPress: () => void;
   accentBorder?: boolean;
+  showEntregaAlertChip?: boolean;
 };
 
 export function TrabajoCard({
@@ -28,6 +30,7 @@ export function TrabajoCard({
   estado,
   onPress,
   accentBorder = false,
+  showEntregaAlertChip = false,
 }: TrabajoCardProps) {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
@@ -55,6 +58,12 @@ export function TrabajoCard({
           {formatFechaEntrega(fechaEntrega)}
         </Text>
         <View style={styles.chipsRow}>
+          {showEntregaAlertChip ? (
+            <View style={styles.entregaChip}>
+              <Ionicons name="alert-circle-outline" size={14} color="#FFFFFF" />
+              <Text style={styles.entregaChipText}>Entrega</Text>
+            </View>
+          ) : null}
           <View style={styles.tipoChip}>
             <Text style={styles.tipoChipText}> {tipoTrabajo}</Text>
           </View>
@@ -145,6 +154,22 @@ function createStyles(colors: ThemeColors) {
       gap: 6,
       alignSelf: "flex-end",
       marginTop: 8,
+      flexWrap: "wrap",
+      justifyContent: "flex-end",
+    },
+    entregaChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      borderRadius: 9999,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      backgroundColor: "#DC2626",
+    },
+    entregaChipText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "700",
     },
     statusChip: {
       borderRadius: 9999,

@@ -8,6 +8,10 @@ import {
   View,
 } from "react-native";
 
+import {
+  DashboardProximasEntregasCard,
+  EntregasMesGroup,
+} from "@/components/dashboard-proximas-entregas-card";
 import { supabase } from "@/lib/supabase";
 import { useAppTheme } from "@/providers/theme-provider";
 
@@ -48,6 +52,7 @@ export default function DashboardScreen() {
     recibidas: 0,
     total: 0,
   });
+  const [entregasPorMes, setEntregasPorMes] = useState<EntregasMesGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -62,7 +67,7 @@ export default function DashboardScreen() {
     const { data, error } = await supabase
       .from("trabajos")
       .select(
-        "estado,tipo_trabajo:tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,precio)",
+        "nombre_trabajo,fecha_entrega,estado,tipo_trabajo:tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,precio)",
       );
 
     if (error) {
@@ -73,6 +78,7 @@ export default function DashboardScreen() {
 
     setResumenPorTipo(buildResumenPorTipo(data));
     setGanancias(buildGanancias(data));
+    setEntregasPorMes(buildEntregasPorMes(data));
     setLoading(false);
   }, []);
 
@@ -210,6 +216,12 @@ export default function DashboardScreen() {
           </View>
         )}
       </View>
+
+      <DashboardProximasEntregasCard
+        loading={loading}
+        errorMessage={errorMessage}
+        groups={entregasPorMes}
+      />
     </ScrollView>
   );
 }
@@ -504,3 +516,82 @@ function formatMoney(value: number) {
   const sign = value < 0 ? "-" : "";
   return `${sign}$${integerWithSeparator},${decimalPart}`;
 }
+
+function buildEntregasPorMes(rows: unknown): EntregasMesGroup[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  const today = startOfDay(new Date());
+  const grouped = new Map<string, EntregasMesGroup>();
+
+  for (const row of rows) {
+    const typedRow = row as {
+      nombre_trabajo?: string;
+      fecha_entrega?: string | null;
+      estado?: string;
+    };
+
+    const estado = parseEstado(typedRow.estado);
+    if (estado === "entregado") {
+      continue;
+    }
+
+    if (!typedRow.fecha_entrega) {
+      continue;
+    }
+
+    const entregaDate = parseDateISO(String(typedRow.fecha_entrega));
+    if (!entregaDate || entregaDate < today) {
+      continue;
+    }
+
+    const year = entregaDate.getFullYear();
+    const month = entregaDate.getMonth();
+    const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const label = `${MONTH_NAMES_ES[month]} ${year}`;
+    const nombreTrabajo = String(typedRow.nombre_trabajo ?? "Trabajo sin nombre");
+
+    const current = grouped.get(key) ?? {
+      key,
+      mesLabel: label,
+      trabajos: [],
+    };
+    current.trabajos.push(nombreTrabajo);
+    grouped.set(key, current);
+  }
+
+  return Array.from(grouped.entries())
+    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+    .map(([, group]) => ({
+      ...group,
+      trabajos: group.trabajos.sort((a, b) => a.localeCompare(b)),
+    }));
+}
+
+function parseDateISO(value: string) {
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+const MONTH_NAMES_ES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
