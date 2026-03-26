@@ -55,6 +55,7 @@ const styles = StyleSheet.create({
   headerLogo: {
     marginRight: 8,
     borderRadius: 10,
+    marginLeft: 20,
   },
 });
 

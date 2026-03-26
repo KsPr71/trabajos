@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Archei",
-    "slug": "trabajos",
+    "slug": "archei",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -12,6 +12,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.archei.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -45,6 +46,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "283c7cff-a08d-4082-a875-9d395ef6e93b"
+      }
+    },
+    "owner": "synaptic"
   }
 }
