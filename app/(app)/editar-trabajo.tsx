@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -16,6 +17,7 @@ import {
 import { ComboBox, ComboOption } from '@/components/ui/combobox';
 import {
   getCachedCatalogo,
+  getCachedClientesConTelefono,
   mapSupabaseClienteRows,
   mapSupabaseCatalogRows,
   replaceCachedClientesConTelefono,
@@ -23,6 +25,7 @@ import {
 } from '@/lib/catalogos-cache';
 import { upsertCachedTrabajo } from '@/lib/trabajos-cache';
 import { supabase } from '@/lib/supabase';
+import { buildTrabajoTerminadoWhatsAppMessage, openWhatsAppChat } from '@/lib/whatsapp';
 import { ThemeColors, useAppTheme } from '@/providers/theme-provider';
 import { useToast } from '@/providers/toast-provider';
 
@@ -47,12 +50,14 @@ export default function EditarTrabajoScreen() {
   const [especialidadId, setEspecialidadId] = useState<number | null>(null);
   const [institucionId, setInstitucionId] = useState<number | null>(null);
   const [estado, setEstado] = useState<EstadoTrabajo>('creado');
+  const [estadoOriginal, setEstadoOriginal] = useState<EstadoTrabajo>('creado');
 
   const [fechaRecibido, setFechaRecibido] = useState<Date>(new Date());
   const [fechaEntrega, setFechaEntrega] = useState<Date | null>(null);
   const [pickerField, setPickerField] = useState<PickerField>(null);
 
   const [clientes, setClientes] = useState<ComboOption[]>([]);
+  const [clientesTelefonoById, setClientesTelefonoById] = useState<Record<number, string>>({});
   const [tiposTrabajo, setTiposTrabajo] = useState<ComboOption[]>([]);
   const [especialidades, setEspecialidades] = useState<ComboOption[]>([]);
   const [instituciones, setInstituciones] = useState<ComboOption[]>([]);
@@ -75,7 +80,7 @@ export default function EditarTrabajoScreen() {
     try {
       const [cachedClientes, cachedTiposTrabajo, cachedEspecialidades, cachedInstituciones] =
         await Promise.all([
-          getCachedCatalogo('clientes'),
+          getCachedClientesConTelefono(),
           getCachedCatalogo('tipo_trabajo'),
           getCachedCatalogo('especialidad'),
           getCachedCatalogo('institucion'),
@@ -94,6 +99,7 @@ export default function EditarTrabajoScreen() {
 
       if (hasCachedCatalogs) {
         setClientes(clientesFromCache);
+        setClientesTelefonoById(buildClientesTelefonoMap(cachedClientes));
         setTiposTrabajo(tiposFromCache);
         setEspecialidades(especialidadesFromCache);
         setInstituciones(institucionesFromCache);
@@ -142,6 +148,7 @@ export default function EditarTrabajoScreen() {
       const institucionRows = mapSupabaseCatalogRows(institucionRes.data);
 
       setClientes(mapRowsToOptions(clientesRows));
+      setClientesTelefonoById(buildClientesTelefonoMap(clientesRows));
       setTiposTrabajo(mapRowsToOptions(tiposRows));
       setEspecialidades(mapRowsToOptions(especialidadRows));
       setInstituciones(mapRowsToOptions(institucionRows));
@@ -169,7 +176,9 @@ export default function EditarTrabajoScreen() {
     setFechaEntrega(
       trabajoRes.data.fecha_entrega ? parseDateFromISO(String(trabajoRes.data.fecha_entrega)) : null
     );
-    setEstado(parseEstado(trabajoRes.data.estado));
+    const parsedEstado = parseEstado(trabajoRes.data.estado);
+    setEstado(parsedEstado);
+    setEstadoOriginal(parsedEstado);
     setLoadingData(false);
   }, [trabajoId]);
 
@@ -270,6 +279,26 @@ export default function EditarTrabajoScreen() {
       });
     } catch (cacheError) {
       console.warn('No se pudo actualizar cache local desde edicion.', cacheError);
+    }
+
+    if (estado === 'terminado' && estadoOriginal !== 'terminado') {
+      const telefonoCliente = clienteId ? clientesTelefonoById[clienteId]?.trim() : '';
+      if (!telefonoCliente) {
+        showToast('Trabajo terminado, pero el cliente no tiene telefono para WhatsApp.', 'info');
+      } else {
+        const shouldSendWhatsApp = await confirmWhatsAppSend();
+        if (shouldSendWhatsApp) {
+          try {
+            await openWhatsAppChat(
+              telefonoCliente,
+              buildTrabajoTerminadoWhatsAppMessage(cleanNombre)
+            );
+            showToast('Mensaje de WhatsApp abierto.', 'success');
+          } catch (whatsAppError) {
+            showToast(`No se pudo abrir WhatsApp: ${String(whatsAppError)}`, 'error');
+          }
+        }
+      }
     }
 
     if (estado === 'entregado') {
@@ -471,6 +500,23 @@ function mapRowsToOptions(rows: unknown): ComboOption[] {
     .filter((item) => Number.isFinite(item.id) && item.label.length > 0);
 }
 
+function buildClientesTelefonoMap(rows: unknown): Record<number, string> {
+  if (!Array.isArray(rows)) {
+    return {};
+  }
+
+  return rows.reduce<Record<number, string>>((acc, row) => {
+    const typedRow = row as { id?: number | string; telefono?: string | null };
+    const id = Number(typedRow.id);
+    const telefono = typedRow.telefono ? String(typedRow.telefono).trim() : '';
+
+    if (Number.isFinite(id) && telefono) {
+      acc[id] = telefono;
+    }
+    return acc;
+  }, {});
+}
+
 function getOptionLabel(options: ComboOption[], optionId: number | null, fallback: string) {
   if (!optionId) {
     return fallback;
@@ -512,6 +558,38 @@ function formatDateISO(date: Date) {
 
 function formatDateDisplay(date: Date) {
   return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+function confirmWhatsAppSend() {
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const close = (value: boolean) => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+
+    Alert.alert(
+      'Enviar aviso al cliente',
+      'Este trabajo cambio a "terminado". Deseas enviar un mensaje de WhatsApp ahora?',
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+          onPress: () => close(false),
+        },
+        {
+          text: 'Si, enviar',
+          onPress: () => close(true),
+        },
+      ],
+      {
+        cancelable: true,
+        onDismiss: () => close(false),
+      }
+    );
+  });
 }
 
 function createStyles(colors: ThemeColors) {

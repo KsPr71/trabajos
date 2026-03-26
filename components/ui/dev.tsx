@@ -1,10 +1,11 @@
+import Logo from "@/components/ui/Logo";
 import { Colors } from "@/constants/theme";
 import {
-    Image,
-    Linking,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  Image,
+  Linking,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 const Developer = () => {
@@ -23,6 +24,7 @@ const Developer = () => {
           },
         ]}
       >
+        <Logo size={50} style={styles.headerLogo} />
         <Image
           source={require("@/assets/images/novadev1.png")}
           style={styles.novaDevImage}
@@ -35,18 +37,24 @@ const Developer = () => {
 
 const styles = StyleSheet.create({
   company: {
+    display: "flex",
+    flexDirection: "row",
     marginTop: 20,
     width: "100%",
     borderRadius: 16,
     borderWidth: 1,
-    padding: 10,
+    padding: 5,
     marginBottom: 16,
     alignItems: "center",
     alignSelf: "center",
   },
   novaDevImage: {
-    width: "70%",
-    height: 50,
+    width: "50%",
+    height: 30,
+  },
+  headerLogo: {
+    marginRight: 8,
+    borderRadius: 10,
   },
 });
 
