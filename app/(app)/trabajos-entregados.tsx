@@ -1,26 +1,13 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
-import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { supabase } from "@/lib/supabase";
-import {
-  CachedTrabajo,
-  getCachedTrabajos,
-  getLastSyncAt,
-  replaceCachedTrabajos,
-} from "@/lib/trabajos-cache";
-import { ThemeColors, useAppTheme } from "@/providers/theme-provider";
+import { supabase } from '@/lib/supabase';
+import { CachedTrabajo, getCachedTrabajos, getLastSyncAt, replaceCachedTrabajos } from '@/lib/trabajos-cache';
+import { ThemeColors, useAppTheme } from '@/providers/theme-provider';
 
-type EstadoTrabajo = "creado" | "en_proceso" | "terminado" | "entregado";
+type EstadoTrabajo = 'creado' | 'en_proceso' | 'terminado' | 'entregado';
 
 type TrabajoItem = {
   id: number;
@@ -33,7 +20,7 @@ type TrabajoItem = {
   updatedAt: string;
 };
 
-export default function TrabajosScreen() {
+export default function TrabajosEntregadosScreen() {
   const { colors } = useAppTheme();
   const router = useRouter();
   const styles = createStyles(colors);
@@ -43,79 +30,74 @@ export default function TrabajosScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [syncInfo, setSyncInfo] = useState<string | null>(null);
 
-  const loadTrabajos = useCallback(async () => {
+  const loadTrabajosEntregados = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
     setSyncInfo(null);
 
     let cachedRowsAll: TrabajoItem[] = [];
+    let cachedEntregados: TrabajoItem[] = [];
+
     try {
       cachedRowsAll = await getCachedTrabajos();
-      const cachedVisible = cachedRowsAll.filter(
-        (item) => item.estado !== "entregado",
-      );
-      if (cachedVisible.length > 0) {
-        setTrabajos(cachedVisible);
+      cachedEntregados = cachedRowsAll.filter((item) => item.estado === 'entregado');
+
+      if (cachedEntregados.length > 0) {
+        setTrabajos(cachedEntregados);
         const lastSync = await getLastSyncAt();
         setSyncInfo(
           lastSync
             ? `Mostrando cache local. Ultima sincronizacion: ${formatDateTime(lastSync)}`
-            : "Mostrando cache local. Sincronizando...",
+            : 'Mostrando cache local. Sincronizando...'
         );
         setLoading(false);
       }
     } catch (error) {
-      console.warn("No se pudo leer cache local de trabajos.", error);
+      console.warn('No se pudo leer cache local de entregados.', error);
     }
 
     const { data, error } = await supabase
-      .from("trabajos")
+      .from('trabajos')
       .select(
-        "id,nombre_trabajo,estado,fecha_entrega,created_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre)",
+        'id,nombre_trabajo,estado,fecha_entrega,created_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre)'
       )
-      .order("created_at", { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) {
       setLoading(false);
-      if (cachedRowsAll.length === 0) {
+      if (cachedEntregados.length === 0) {
         setErrorMessage(error.message);
       } else {
-        setSyncInfo("Sin conexion a Supabase. Mostrando datos locales.");
+        setSyncInfo('Sin conexion a Supabase. Mostrando datos locales.');
       }
       return;
     }
 
     const mappedAll = mapTrabajos(data);
-    const mappedVisible = mappedAll.filter(
-      (item) => item.estado !== "entregado",
-    );
-    const cachedVisible = cachedRowsAll.filter(
-      (item) => item.estado !== "entregado",
-    );
-    const changed = !areTrabajosEqual(cachedVisible, mappedVisible);
+    const mappedEntregados = mappedAll.filter((item) => item.estado === 'entregado');
+    const changed = !areTrabajosEqual(cachedEntregados, mappedEntregados);
 
     if (changed) {
-      setTrabajos(mappedVisible);
+      setTrabajos(mappedEntregados);
     }
 
     try {
       await replaceCachedTrabajos(mappedAll as CachedTrabajo[]);
-    } catch (error) {
-      console.warn("No se pudo actualizar cache local de trabajos.", error);
+    } catch (cacheError) {
+      console.warn('No se pudo actualizar cache local de entregados.', cacheError);
     }
 
-    const lastSync = new Date().toISOString();
-    setSyncInfo(`Sincronizado con Supabase: ${formatDateTime(lastSync)}`);
+    setSyncInfo(`Sincronizado con Supabase: ${formatDateTime(new Date().toISOString())}`);
     setLoading(false);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadTrabajos().catch((error) => {
+      loadTrabajosEntregados().catch((error) => {
         setLoading(false);
         setErrorMessage(String(error));
       });
-    }, [loadTrabajos]),
+    }, [loadTrabajosEntregados])
   );
 
   return (
@@ -123,19 +105,15 @@ export default function TrabajosScreen() {
       {loading ? (
         <View style={styles.stateCard}>
           <ActivityIndicator color={colors.buttonBg} />
-          <Text style={styles.stateText}>Cargando trabajos...</Text>
+          <Text style={styles.stateText}>Cargando trabajos entregados...</Text>
         </View>
       ) : errorMessage ? (
         <View style={styles.stateCard}>
-          <Text style={styles.stateText}>
-            Error cargando trabajos: {errorMessage}
-          </Text>
+          <Text style={styles.stateText}>Error cargando trabajos: {errorMessage}</Text>
         </View>
       ) : trabajos.length === 0 ? (
         <View style={styles.stateCard}>
-          <Text style={styles.stateText}>
-            No hay trabajos registrados todavia.
-          </Text>
+          <Text style={styles.stateText}>No hay trabajos entregados todavia.</Text>
         </View>
       ) : (
         <>
@@ -151,12 +129,11 @@ export default function TrabajosScreen() {
                 <Pressable
                   onPress={() =>
                     router.push({
-                      pathname: "/(app)/editar-trabajo",
+                      pathname: '/(app)/editar-trabajo',
                       params: { id: String(item.id) },
                     })
                   }
-                  style={styles.card}
-                >
+                  style={styles.card}>
                   <Text style={styles.cardTitle}>{item.nombreTrabajo}</Text>
                   <Text style={styles.metaText}>
                     <Text style={styles.metaLabel}>Autor: </Text>
@@ -172,21 +149,10 @@ export default function TrabajosScreen() {
                   </Text>
                   <View style={styles.chipsRow}>
                     <View style={styles.tipoChip}>
-                      <Text style={styles.tipoChipText}>
-                        Tipo: {item.tipoTrabajo}
-                      </Text>
+                      <Text style={styles.tipoChipText}>Tipo: {item.tipoTrabajo}</Text>
                     </View>
-                    <View
-                      style={[
-                        styles.statusChip,
-                        { backgroundColor: chip.backgroundColor },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.chipText, { color: chip.textColor }]}
-                      >
-                        {chip.label}
-                      </Text>
+                    <View style={[styles.statusChip, { backgroundColor: chip.backgroundColor }]}>
+                      <Text style={[styles.chipText, { color: chip.textColor }]}>{chip.label}</Text>
                     </View>
                   </View>
                 </Pressable>
@@ -195,14 +161,6 @@ export default function TrabajosScreen() {
           />
         </>
       )}
-
-      <Pressable
-        accessibilityLabel="Crear nuevo trabajo"
-        onPress={() => router.push("/(app)/nuevo-trabajo")}
-        style={styles.fabWrap}
-      >
-        <Ionicons name="add" size={24} color={colors.buttonText} />
-      </Pressable>
     </View>
   );
 }
@@ -227,29 +185,19 @@ function mapTrabajos(rows: unknown): TrabajoItem[] {
 
       return {
         id: Number(typedRow.id),
-        nombreTrabajo: String(typedRow.nombre_trabajo ?? ""),
-        autor: getRelationName(typedRow.clientes, "Sin autor"),
-        especialidad: getRelationName(
-          typedRow.especialidad,
-          "Sin especialidad",
-        ),
-        tipoTrabajo: getRelationName(typedRow.tipo_trabajo, "Sin tipo"),
-        fechaEntrega: typedRow.fecha_entrega
-          ? String(typedRow.fecha_entrega)
-          : null,
+        nombreTrabajo: String(typedRow.nombre_trabajo ?? ''),
+        autor: getRelationName(typedRow.clientes, 'Sin autor'),
+        especialidad: getRelationName(typedRow.especialidad, 'Sin especialidad'),
+        tipoTrabajo: getRelationName(typedRow.tipo_trabajo, 'Sin tipo'),
+        fechaEntrega: typedRow.fecha_entrega ? String(typedRow.fecha_entrega) : null,
         estado: parseEstado(typedRow.estado),
         updatedAt: String(typedRow.created_at ?? new Date().toISOString()),
       };
     })
-    .filter(
-      (item) => Number.isFinite(item.id) && item.nombreTrabajo.length > 0,
-    );
+    .filter((item) => Number.isFinite(item.id) && item.nombreTrabajo.length > 0);
 }
 
-function areTrabajosEqual(
-  previousRows: TrabajoItem[],
-  nextRows: TrabajoItem[],
-) {
+function areTrabajosEqual(previousRows: TrabajoItem[], nextRows: TrabajoItem[]) {
   if (previousRows.length !== nextRows.length) {
     return false;
   }
@@ -279,7 +227,7 @@ function getRelationName(value: unknown, fallback: string) {
     const first = value[0] as { nombre?: string } | undefined;
     return first?.nombre ? String(first.nombre) : fallback;
   }
-  if (value && typeof value === "object") {
+  if (value && typeof value === 'object') {
     const record = value as { nombre?: string };
     return record.nombre ? String(record.nombre) : fallback;
   }
@@ -287,42 +235,42 @@ function getRelationName(value: unknown, fallback: string) {
 }
 
 function parseEstado(rawValue: unknown): EstadoTrabajo {
-  if (rawValue === "entregado") {
-    return "entregado";
+  if (rawValue === 'entregado') {
+    return 'entregado';
   }
-  if (rawValue === "en_proceso") {
-    return "en_proceso";
+  if (rawValue === 'en_proceso') {
+    return 'en_proceso';
   }
-  if (rawValue === "terminado") {
-    return "terminado";
+  if (rawValue === 'terminado') {
+    return 'terminado';
   }
-  return "creado";
+  return 'creado';
 }
 
 function getEstadoChip(estado: EstadoTrabajo, colors: ThemeColors) {
-  if (estado === "entregado") {
+  if (estado === 'entregado') {
     return {
-      label: "Entregado",
-      backgroundColor: "#059669",
-      textColor: "#FFFFFF",
+      label: 'Entregado',
+      backgroundColor: '#059669',
+      textColor: '#FFFFFF',
     };
   }
-  if (estado === "terminado") {
+  if (estado === 'terminado') {
     return {
-      label: "Terminado",
-      backgroundColor: "#22A06B",
-      textColor: "#FFFFFF",
+      label: 'Terminado',
+      backgroundColor: '#22A06B',
+      textColor: '#FFFFFF',
     };
   }
-  if (estado === "en_proceso") {
+  if (estado === 'en_proceso') {
     return {
-      label: "En proceso",
-      backgroundColor: "#F59E0B",
-      textColor: "#1B1400",
+      label: 'En proceso',
+      backgroundColor: '#F59E0B',
+      textColor: '#1B1400',
     };
   }
   return {
-    label: "Creado",
+    label: 'Creado',
     backgroundColor: colors.buttonBg,
     textColor: colors.buttonText,
   };
@@ -341,17 +289,17 @@ function createStyles(colors: ThemeColors) {
       borderWidth: 2,
       borderRadius: 16,
       padding: 18,
-      alignItems: "center",
+      alignItems: 'center',
       gap: 10,
     },
     stateText: {
       color: colors.textSecondary,
-      textAlign: "center",
+      textAlign: 'center',
       fontSize: 15,
     },
     listContent: {
       gap: 12,
-      paddingBottom: 100,
+      paddingBottom: 24,
     },
     syncInfo: {
       color: colors.textSecondary,
@@ -367,16 +315,14 @@ function createStyles(colors: ThemeColors) {
       padding: 16,
       paddingBottom: 52,
       gap: 8,
-      position: "relative",
-      borderLeftWidth: 10,
-      borderLeftColor: colors.border,
+      position: 'relative',
     },
     chipsRow: {
-      position: "absolute",
+      position: 'absolute',
       right: 10,
       bottom: 10,
-      flexDirection: "row",
-      alignItems: "center",
+      flexDirection: 'row',
+      alignItems: 'center',
       gap: 6,
     },
     statusChip: {
@@ -387,7 +333,7 @@ function createStyles(colors: ThemeColors) {
     cardTitle: {
       color: colors.textPrimary,
       fontSize: 18,
-      fontWeight: "700",
+      fontWeight: '700',
     },
     chip: {
       borderRadius: 9999,
@@ -396,10 +342,10 @@ function createStyles(colors: ThemeColors) {
     },
     chipText: {
       fontSize: 12,
-      fontWeight: "700",
+      fontWeight: '700',
     },
     tipoChip: {
-      alignSelf: "flex-start",
+      alignSelf: 'flex-start',
       backgroundColor: colors.inputBg,
       borderColor: colors.border,
       borderWidth: 1,
@@ -410,7 +356,7 @@ function createStyles(colors: ThemeColors) {
     tipoChipText: {
       color: colors.inputText,
       fontSize: 12,
-      fontWeight: "700",
+      fontWeight: '700',
     },
     metaText: {
       color: colors.textSecondary,
@@ -419,23 +365,7 @@ function createStyles(colors: ThemeColors) {
     },
     metaLabel: {
       color: colors.textPrimary,
-      fontWeight: "700",
-    },
-    fabWrap: {
-      position: "absolute",
-      right: 20,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 9999,
-      backgroundColor: colors.buttonBg,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.22,
-      shadowRadius: 8,
-      elevation: 5,
+      fontWeight: '700',
     },
   });
 }
@@ -445,19 +375,19 @@ function formatDateTime(isoDate: string) {
   if (Number.isNaN(date.getTime())) {
     return isoDate;
   }
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
   const year = date.getFullYear();
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, '0');
+  const minute = String(date.getMinutes()).padStart(2, '0');
   return `${day}/${month}/${year} ${hour}:${minute}`;
 }
 
 function formatFechaEntrega(fechaEntrega: string | null) {
   if (!fechaEntrega) {
-    return "Sin fecha";
+    return 'Sin fecha';
   }
-  const [year, month, day] = fechaEntrega.split("-");
+  const [year, month, day] = fechaEntrega.split('-');
   if (!year || !month || !day) {
     return fechaEntrega;
   }

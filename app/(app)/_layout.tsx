@@ -14,6 +14,8 @@ const drawerLabels: Record<string, string> = {
   institucion: 'Institucion',
   ajustes: 'Ajustes',
   'nuevo-trabajo': 'Nuevo trabajo',
+  'editar-trabajo': 'Editar trabajo',
+  'trabajos-entregados': 'Trabajos entregados',
 };
 
 export default function AppLayout() {
@@ -43,7 +45,10 @@ export default function AppLayout() {
         drawerInactiveTintColor: colors.drawerInactiveText,
         title: drawerLabels[route.name] ?? route.name,
         drawerLabel: drawerLabels[route.name] ?? route.name,
-        drawerItemStyle: route.name === 'nuevo-trabajo' ? { display: 'none' } : undefined,
+        drawerItemStyle:
+          route.name === 'nuevo-trabajo' || route.name === 'editar-trabajo'
+            ? { display: 'none' }
+            : undefined,
         headerShown: route.name !== '(tabs)',
       })}
     />

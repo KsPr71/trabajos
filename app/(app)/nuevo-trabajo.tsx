@@ -127,6 +127,7 @@ export default function NuevoTrabajoScreen() {
       institucion_id: institucionId,
       fecha_recibido: formatDateISO(recibido),
       fecha_entrega: entrega ? formatDateISO(entrega) : null,
+      estado: 'creado',
     });
 
     setLoadingSubmit(false);

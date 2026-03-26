@@ -6,15 +6,18 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider } from '@/providers/auth-provider';
 import { AppThemeProvider, useAppTheme } from '@/providers/theme-provider';
+import { ToastProvider } from '@/providers/toast-provider';
 
 function RootNavigation() {
   const { isDark } = useAppTheme();
 
   return (
     <>
-      <AuthProvider>
-        <Slot />
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <Slot />
+        </AuthProvider>
+      </ToastProvider>
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </>
   );

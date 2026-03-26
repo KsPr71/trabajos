@@ -9,7 +9,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerStyle: { backgroundColor: colors.headerBg },
         headerTintColor: colors.headerText,
         headerLeft: () => <DrawerToggleButton tintColor={colors.headerText} />,
@@ -19,23 +19,15 @@ export default function TabsLayout() {
         },
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="trabajos"
-        options={{
-          title: 'Trabajos',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="briefcase-outline" size={size} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
+        title: route.name === 'trabajos' ? 'Trabajos' : 'Dashboard',
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons
+            name={route.name === 'trabajos' ? 'briefcase-outline' : 'home-outline'}
+            size={size}
+            color={color}
+          />
+        ),
+      })}
+    />
   );
 }
