@@ -1,6 +1,7 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -13,6 +14,13 @@ import {
 } from 'react-native';
 
 import { ComboBox, ComboOption } from '@/components/ui/combobox';
+import {
+  getCachedCatalogo,
+  mapSupabaseClienteRows,
+  mapSupabaseCatalogRows,
+  replaceCachedClientesConTelefono,
+  replaceCachedCatalogo,
+} from '@/lib/catalogos-cache';
 import { upsertCachedTrabajo } from '@/lib/trabajos-cache';
 import { supabase } from '@/lib/supabase';
 import { ThemeColors, useAppTheme } from '@/providers/theme-provider';
@@ -53,77 +61,126 @@ export default function EditarTrabajoScreen() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (!Number.isFinite(trabajoId)) {
-        setLoadingData(false);
-        setMessage('ID de trabajo invalido.');
-        return;
-      }
-
-      setLoadingData(true);
-      setMessage(null);
-
-      const [clientesRes, tiposRes, especialidadRes, institucionRes, trabajoRes] = await Promise.all(
-        [
-          supabase.from('clientes').select('id,nombre').order('nombre', { ascending: true }),
-          supabase.from('tipo_trabajo').select('id,nombre').order('nombre', { ascending: true }),
-          supabase.from('especialidad').select('id,nombre').order('nombre', { ascending: true }),
-          supabase.from('institucion').select('id,nombre').order('nombre', { ascending: true }),
-          supabase
-            .from('trabajos')
-            .select(
-              'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado'
-            )
-            .eq('id', trabajoId)
-            .maybeSingle(),
-        ]
-      );
-
-      const firstError =
-        clientesRes.error ??
-        tiposRes.error ??
-        especialidadRes.error ??
-        institucionRes.error ??
-        trabajoRes.error;
-
-      if (firstError) {
-        setLoadingData(false);
-        setMessage(`Error cargando datos: ${firstError.message}`);
-        return;
-      }
-
-      if (!trabajoRes.data) {
-        setLoadingData(false);
-        setMessage('No se encontro el trabajo.');
-        return;
-      }
-
-      setClientes(mapRowsToOptions(clientesRes.data));
-      setTiposTrabajo(mapRowsToOptions(tiposRes.data));
-      setEspecialidades(mapRowsToOptions(especialidadRes.data));
-      setInstituciones(mapRowsToOptions(institucionRes.data));
-
-      setNombreTrabajo(String(trabajoRes.data.nombre_trabajo ?? ''));
-      setTipoTrabajoId(Number(trabajoRes.data.tipo_trabajo_id ?? null));
-      setClienteId(Number(trabajoRes.data.cliente_id ?? null));
-      setEspecialidadId(Number(trabajoRes.data.especialidad_id ?? null));
-      setInstitucionId(
-        trabajoRes.data.institucion_id === null ? null : Number(trabajoRes.data.institucion_id)
-      );
-      setFechaRecibido(parseDateFromISO(String(trabajoRes.data.fecha_recibido)));
-      setFechaEntrega(
-        trabajoRes.data.fecha_entrega ? parseDateFromISO(String(trabajoRes.data.fecha_entrega)) : null
-      );
-      setEstado(parseEstado(trabajoRes.data.estado));
+  const loadData = useCallback(async () => {
+    if (!Number.isFinite(trabajoId)) {
       setLoadingData(false);
-    };
+      setMessage('ID de trabajo invalido.');
+      return;
+    }
 
-    loadData().catch((error) => {
+    setLoadingData(true);
+    setMessage(null);
+
+    let hasCachedCatalogs = false;
+    try {
+      const [cachedClientes, cachedTiposTrabajo, cachedEspecialidades, cachedInstituciones] =
+        await Promise.all([
+          getCachedCatalogo('clientes'),
+          getCachedCatalogo('tipo_trabajo'),
+          getCachedCatalogo('especialidad'),
+          getCachedCatalogo('institucion'),
+        ]);
+
+      const clientesFromCache = mapRowsToOptions(cachedClientes);
+      const tiposFromCache = mapRowsToOptions(cachedTiposTrabajo);
+      const especialidadesFromCache = mapRowsToOptions(cachedEspecialidades);
+      const institucionesFromCache = mapRowsToOptions(cachedInstituciones);
+
+      hasCachedCatalogs =
+        clientesFromCache.length > 0 ||
+        tiposFromCache.length > 0 ||
+        especialidadesFromCache.length > 0 ||
+        institucionesFromCache.length > 0;
+
+      if (hasCachedCatalogs) {
+        setClientes(clientesFromCache);
+        setTiposTrabajo(tiposFromCache);
+        setEspecialidades(especialidadesFromCache);
+        setInstituciones(institucionesFromCache);
+      }
+    } catch (cacheError) {
+      console.warn('No se pudo leer cache local de catalogos en edicion.', cacheError);
+    }
+
+    const [clientesRes, tiposRes, especialidadRes, institucionRes, trabajoRes] = await Promise.all([
+      supabase.from('clientes').select('id,nombre,telefono,created_at').order('nombre', { ascending: true }),
+      supabase.from('tipo_trabajo').select('id,nombre,created_at').order('nombre', { ascending: true }),
+      supabase.from('especialidad').select('id,nombre,created_at').order('nombre', { ascending: true }),
+      supabase.from('institucion').select('id,nombre,created_at').order('nombre', { ascending: true }),
+      supabase
+        .from('trabajos')
+        .select(
+          'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado'
+        )
+        .eq('id', trabajoId)
+        .maybeSingle(),
+    ]);
+
+    if (trabajoRes.error) {
       setLoadingData(false);
-      setMessage(`Error cargando datos: ${String(error)}`);
-    });
+      setMessage(`Error cargando datos: ${trabajoRes.error.message}`);
+      return;
+    }
+
+    if (!trabajoRes.data) {
+      setLoadingData(false);
+      setMessage('No se encontro el trabajo.');
+      return;
+    }
+
+    const firstCatalogError = clientesRes.error ?? tiposRes.error ?? especialidadRes.error ?? institucionRes.error;
+    if (firstCatalogError && !hasCachedCatalogs) {
+      setLoadingData(false);
+      setMessage(`Error cargando catalogos: ${firstCatalogError.message}`);
+      return;
+    }
+
+    if (!firstCatalogError) {
+      const clientesRows = mapSupabaseClienteRows(clientesRes.data);
+      const tiposRows = mapSupabaseCatalogRows(tiposRes.data);
+      const especialidadRows = mapSupabaseCatalogRows(especialidadRes.data);
+      const institucionRows = mapSupabaseCatalogRows(institucionRes.data);
+
+      setClientes(mapRowsToOptions(clientesRows));
+      setTiposTrabajo(mapRowsToOptions(tiposRows));
+      setEspecialidades(mapRowsToOptions(especialidadRows));
+      setInstituciones(mapRowsToOptions(institucionRows));
+
+      try {
+        await Promise.all([
+          replaceCachedClientesConTelefono(clientesRows),
+          replaceCachedCatalogo('tipo_trabajo', tiposRows),
+          replaceCachedCatalogo('especialidad', especialidadRows),
+          replaceCachedCatalogo('institucion', institucionRows),
+        ]);
+      } catch (cacheError) {
+        console.warn('No se pudo actualizar cache local de catalogos en edicion.', cacheError);
+      }
+    } else {
+      setMessage('No se pudieron sincronizar catalogos. Usando cache local.');
+    }
+
+    setNombreTrabajo(String(trabajoRes.data.nombre_trabajo ?? ''));
+    setTipoTrabajoId(Number(trabajoRes.data.tipo_trabajo_id ?? null));
+    setClienteId(Number(trabajoRes.data.cliente_id ?? null));
+    setEspecialidadId(Number(trabajoRes.data.especialidad_id ?? null));
+    setInstitucionId(trabajoRes.data.institucion_id === null ? null : Number(trabajoRes.data.institucion_id));
+    setFechaRecibido(parseDateFromISO(String(trabajoRes.data.fecha_recibido)));
+    setFechaEntrega(
+      trabajoRes.data.fecha_entrega ? parseDateFromISO(String(trabajoRes.data.fecha_entrega)) : null
+    );
+    setEstado(parseEstado(trabajoRes.data.estado));
+    setLoadingData(false);
   }, [trabajoId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData().catch((error) => {
+        setLoadingData(false);
+        setMessage(`Error cargando datos: ${String(error)}`);
+      });
+    }, [loadData])
+  );
 
   const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     if (event.type === 'dismissed') {

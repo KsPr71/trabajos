@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -11,6 +11,8 @@ import {
   View,
 } from "react-native";
 
+import { QuestionSearch } from "@/components/question-search";
+import { TrabajoCard } from "@/components/trabajo-card";
 import { supabase } from "@/lib/supabase";
 import {
   CachedTrabajo,
@@ -36,12 +38,51 @@ type TrabajoItem = {
 export default function TrabajosScreen() {
   const { colors } = useAppTheme();
   const router = useRouter();
+  const navigation = useNavigation();
   const styles = createStyles(colors);
 
   const [trabajos, setTrabajos] = useState<TrabajoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [syncInfo, setSyncInfo] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState("");
+
+  const filteredTrabajos = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) {
+      return trabajos;
+    }
+
+    return trabajos.filter((item) =>
+      [
+        item.nombreTrabajo,
+        item.autor,
+        item.especialidad,
+        item.tipoTrabajo,
+        item.estado,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [searchText, trabajos]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={styles.headerSearchWrap}>
+          <QuestionSearch
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Buscar trabajo, autor o tipo"
+            inHeader
+            expandedWidth={176}
+          />
+        </View>
+      ),
+      headerRightContainerStyle: { paddingRight: 10 },
+    });
+  }, [navigation, searchText, styles.headerSearchWrap]);
 
   const loadTrabajos = useCallback(async () => {
     setLoading(true);
@@ -130,59 +171,34 @@ export default function TrabajosScreen() {
             No hay trabajos registrados todavia.
           </Text>
         </View>
+      ) : filteredTrabajos.length === 0 ? (
+        <View style={styles.stateCard}>
+          <Text style={styles.stateText}>No hay coincidencias para tu busqueda.</Text>
+        </View>
       ) : (
         <>
           {syncInfo ? <Text style={styles.syncInfo}>{syncInfo}</Text> : null}
           <FlatList
-            data={trabajos}
+            data={filteredTrabajos}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => {
-              const chip = getEstadoChip(item.estado, colors);
-
               return (
-                <Pressable
+                <TrabajoCard
+                  nombreTrabajo={item.nombreTrabajo}
+                  autor={item.autor}
+                  especialidad={item.especialidad}
+                  tipoTrabajo={item.tipoTrabajo}
+                  fechaEntrega={item.fechaEntrega}
+                  estado={item.estado}
+                  accentBorder
                   onPress={() =>
                     router.push({
                       pathname: "/(app)/editar-trabajo",
                       params: { id: String(item.id) },
                     })
                   }
-                  style={styles.card}
-                >
-                  <Text style={styles.cardTitle}>{item.nombreTrabajo}</Text>
-                  <Text style={styles.metaText}>
-                    <Text style={styles.metaLabel}>Autor: </Text>
-                    {item.autor}
-                  </Text>
-                  <Text style={styles.metaText}>
-                    <Text style={styles.metaLabel}>Especialidad: </Text>
-                    {item.especialidad}
-                  </Text>
-                  <Text style={styles.metaText}>
-                    <Text style={styles.metaLabel}>Entrega: </Text>
-                    {formatFechaEntrega(item.fechaEntrega)}
-                  </Text>
-                  <View style={styles.chipsRow}>
-                    <View style={styles.tipoChip}>
-                      <Text style={styles.tipoChipText}>
-                        Tipo: {item.tipoTrabajo}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusChip,
-                        { backgroundColor: chip.backgroundColor },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.chipText, { color: chip.textColor }]}
-                      >
-                        {chip.label}
-                      </Text>
-                    </View>
-                  </View>
-                </Pressable>
+                />
               );
             }}
           />
@@ -264,41 +280,17 @@ function parseEstado(rawValue: unknown): EstadoTrabajo {
   return "creado";
 }
 
-function getEstadoChip(estado: EstadoTrabajo, colors: ThemeColors) {
-  if (estado === "entregado") {
-    return {
-      label: "Entregado",
-      backgroundColor: "#059669",
-      textColor: "#FFFFFF",
-    };
-  }
-  if (estado === "terminado") {
-    return {
-      label: "Terminado",
-      backgroundColor: "#22A06B",
-      textColor: "#FFFFFF",
-    };
-  }
-  if (estado === "en_proceso") {
-    return {
-      label: "En proceso",
-      backgroundColor: "#F59E0B",
-      textColor: "#1B1400",
-    };
-  }
-  return {
-    label: "Creado",
-    backgroundColor: colors.buttonBg,
-    textColor: colors.buttonText,
-  };
-}
-
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
       padding: 20,
+    },
+    headerSearchWrap: {
+      width: 176,
+      alignItems: "flex-end",
+      justifyContent: "center",
     },
     stateCard: {
       backgroundColor: colors.card,
@@ -323,68 +315,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: 12,
       marginBottom: 10,
       paddingHorizontal: 2,
-    },
-    card: {
-      backgroundColor: colors.card,
-      borderRadius: 16,
-      borderWidth: 2,
-      borderColor: colors.border,
-      padding: 16,
-      paddingBottom: 52,
-      gap: 8,
-      position: "relative",
-      borderLeftWidth: 10,
-      borderLeftColor: colors.border,
-    },
-    chipsRow: {
-      position: "absolute",
-      right: 10,
-      bottom: 10,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    statusChip: {
-      borderRadius: 9999,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-    },
-    cardTitle: {
-      color: colors.textPrimary,
-      fontSize: 18,
-      fontWeight: "700",
-    },
-    chip: {
-      borderRadius: 9999,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-    },
-    chipText: {
-      fontSize: 12,
-      fontWeight: "700",
-    },
-    tipoChip: {
-      alignSelf: "flex-start",
-      backgroundColor: colors.inputBg,
-      borderColor: colors.border,
-      borderWidth: 1,
-      borderRadius: 9999,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-    },
-    tipoChipText: {
-      color: colors.inputText,
-      fontSize: 12,
-      fontWeight: "700",
-    },
-    metaText: {
-      color: colors.textSecondary,
-      fontSize: 14,
-      lineHeight: 20,
-    },
-    metaLabel: {
-      color: colors.textPrimary,
-      fontWeight: "700",
     },
     fabWrap: {
       position: "absolute",
@@ -416,15 +346,4 @@ function formatDateTime(isoDate: string) {
   const hour = String(date.getHours()).padStart(2, "0");
   const minute = String(date.getMinutes()).padStart(2, "0");
   return `${day}/${month}/${year} ${hour}:${minute}`;
-}
-
-function formatFechaEntrega(fechaEntrega: string | null) {
-  if (!fechaEntrega) {
-    return "Sin fecha";
-  }
-  const [year, month, day] = fechaEntrega.split("-");
-  if (!year || !month || !day) {
-    return fechaEntrega;
-  }
-  return `${day}/${month}/${year}`;
 }

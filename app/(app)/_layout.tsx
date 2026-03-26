@@ -1,21 +1,25 @@
-import { Redirect } from 'expo-router';
-import { Drawer } from 'expo-router/drawer';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import {
+  DrawerContentScrollView,
+  DrawerItemList,
+} from "@react-navigation/drawer";
+import { Redirect } from "expo-router";
+import { Drawer } from "expo-router/drawer";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { useAuth } from '@/providers/auth-provider';
-import { useAppTheme } from '@/providers/theme-provider';
+import { useAuth } from "@/providers/auth-provider";
+import { useAppTheme } from "@/providers/theme-provider";
 
 const drawerLabels: Record<string, string> = {
-  '(tabs)': 'Inicio',
-  perfil: 'Perfil',
-  clientes: 'Clientes',
-  'tipo-trabajo': 'Tipo de trabajo',
-  especialidad: 'Especialidad',
-  institucion: 'Institucion',
-  ajustes: 'Ajustes',
-  'nuevo-trabajo': 'Nuevo trabajo',
-  'editar-trabajo': 'Editar trabajo',
-  'trabajos-entregados': 'Trabajos entregados',
+  "(tabs)": "Inicio",
+  perfil: "Perfil",
+  clientes: "Clientes",
+  "tipo-trabajo": "Tipo de trabajo",
+  especialidad: "Especialidad",
+  institucion: "Institucion",
+  ajustes: "Ajustes",
+  "nuevo-trabajo": "Nuevo trabajo",
+  "editar-trabajo": "Editar trabajo",
+  "trabajos-entregados": "Trabajos entregados",
 };
 
 export default function AppLayout() {
@@ -36,6 +40,33 @@ export default function AppLayout() {
 
   return (
     <Drawer
+      drawerContent={(props) => (
+        <DrawerContentScrollView
+          {...props}
+          contentContainerStyle={styles.drawerScrollContent}
+        >
+          <View
+            style={[
+              styles.welcomeCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.welcomeTitle, { color: colors.textPrimary }]}>
+              Bienvenido
+            </Text>
+            <Text
+              style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}
+            >
+              {session.user.email ?? "usuario"}
+            </Text>
+          </View>
+
+          <DrawerItemList {...props} />
+        </DrawerContentScrollView>
+      )}
       screenOptions={({ route }) => ({
         headerStyle: { backgroundColor: colors.headerBg },
         headerTintColor: colors.headerText,
@@ -46,10 +77,10 @@ export default function AppLayout() {
         title: drawerLabels[route.name] ?? route.name,
         drawerLabel: drawerLabels[route.name] ?? route.name,
         drawerItemStyle:
-          route.name === 'nuevo-trabajo' || route.name === 'editar-trabajo'
-            ? { display: 'none' }
+          route.name === "nuevo-trabajo" || route.name === "editar-trabajo"
+            ? { display: "none" }
             : undefined,
-        headerShown: route.name !== '(tabs)',
+        headerShown: route.name !== "(tabs)",
       })}
     />
   );
@@ -58,8 +89,27 @@ export default function AppLayout() {
 const styles = StyleSheet.create({
   loader: {
     flex: 1,
-    backgroundColor: '#0B1F3A',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#0B1F3A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  drawerScrollContent: {
+    paddingTop: 28,
+  },
+  welcomeCard: {
+    marginTop: 30,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  welcomeTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  welcomeSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
   },
 });

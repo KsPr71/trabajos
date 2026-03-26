@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { mapSupabaseCatalogRow, upsertCachedCatalogo } from '@/lib/catalogos-cache';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
 
@@ -22,13 +23,26 @@ export default function InstitucionScreen() {
     setLoading(true);
     setMessage(null);
 
-    const { error } = await supabase.from('institucion').insert({ nombre: cleanNombre });
+    const { data, error } = await supabase
+      .from('institucion')
+      .insert({ nombre: cleanNombre })
+      .select('id,nombre,created_at')
+      .maybeSingle();
 
     setLoading(false);
 
-    if (error) {
-      setMessage(`Error: ${error.message}`);
+    if (error || !data) {
+      setMessage(`Error: ${error?.message ?? 'No se pudo crear la institucion.'}`);
       return;
+    }
+
+    const cachedItem = mapSupabaseCatalogRow(data);
+    if (cachedItem) {
+      try {
+        await upsertCachedCatalogo('institucion', cachedItem);
+      } catch (cacheError) {
+        console.warn('No se pudo actualizar cache local de institucion.', cacheError);
+      }
     }
 
     setNombre('');

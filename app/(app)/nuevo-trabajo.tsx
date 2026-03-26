@@ -1,5 +1,6 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -12,6 +13,13 @@ import {
 } from 'react-native';
 
 import { ComboBox, ComboOption } from '@/components/ui/combobox';
+import {
+  getCachedCatalogo,
+  mapSupabaseClienteRows,
+  mapSupabaseCatalogRows,
+  replaceCachedClientesConTelefono,
+  replaceCachedCatalogo,
+} from '@/lib/catalogos-cache';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
 
@@ -40,38 +48,91 @@ export default function NuevoTrabajoScreen() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadCatalogs = async () => {
-      setLoadingCatalogs(true);
-      setMessage(null);
+  const loadCatalogs = useCallback(async () => {
+    setLoadingCatalogs(true);
+    setMessage(null);
 
-      const [clientesRes, tiposRes, especialidadRes, institucionRes] = await Promise.all([
-        supabase.from('clientes').select('id,nombre').order('nombre', { ascending: true }),
-        supabase.from('tipo_trabajo').select('id,nombre').order('nombre', { ascending: true }),
-        supabase.from('especialidad').select('id,nombre').order('nombre', { ascending: true }),
-        supabase.from('institucion').select('id,nombre').order('nombre', { ascending: true }),
-      ]);
+    let hasCachedCatalogs = false;
+    try {
+      const [cachedClientes, cachedTiposTrabajo, cachedEspecialidades, cachedInstituciones] =
+        await Promise.all([
+          getCachedCatalogo('clientes'),
+          getCachedCatalogo('tipo_trabajo'),
+          getCachedCatalogo('especialidad'),
+          getCachedCatalogo('institucion'),
+        ]);
 
-      if (clientesRes.error || tiposRes.error || especialidadRes.error || institucionRes.error) {
-        const firstError =
-          clientesRes.error ?? tiposRes.error ?? especialidadRes.error ?? institucionRes.error;
-        setMessage(`Error cargando catalogos: ${firstError?.message ?? 'error desconocido'}`);
+      const clientesFromCache = mapRowsToOptions(cachedClientes);
+      const tiposFromCache = mapRowsToOptions(cachedTiposTrabajo);
+      const especialidadesFromCache = mapRowsToOptions(cachedEspecialidades);
+      const institucionesFromCache = mapRowsToOptions(cachedInstituciones);
+
+      hasCachedCatalogs =
+        clientesFromCache.length > 0 ||
+        tiposFromCache.length > 0 ||
+        especialidadesFromCache.length > 0 ||
+        institucionesFromCache.length > 0;
+
+      if (hasCachedCatalogs) {
+        setClientes(clientesFromCache);
+        setTiposTrabajo(tiposFromCache);
+        setEspecialidades(especialidadesFromCache);
+        setInstituciones(institucionesFromCache);
         setLoadingCatalogs(false);
-        return;
       }
+    } catch (cacheError) {
+      console.warn('No se pudo leer cache local de catalogos.', cacheError);
+    }
 
-      setClientes(mapRowsToOptions(clientesRes.data));
-      setTiposTrabajo(mapRowsToOptions(tiposRes.data));
-      setEspecialidades(mapRowsToOptions(especialidadRes.data));
-      setInstituciones(mapRowsToOptions(institucionRes.data));
-      setLoadingCatalogs(false);
-    };
+    const [clientesRes, tiposRes, especialidadRes, institucionRes] = await Promise.all([
+      supabase.from('clientes').select('id,nombre,telefono,created_at').order('nombre', { ascending: true }),
+      supabase.from('tipo_trabajo').select('id,nombre,created_at').order('nombre', { ascending: true }),
+      supabase.from('especialidad').select('id,nombre,created_at').order('nombre', { ascending: true }),
+      supabase.from('institucion').select('id,nombre,created_at').order('nombre', { ascending: true }),
+    ]);
 
-    loadCatalogs().catch((error) => {
+    if (clientesRes.error || tiposRes.error || especialidadRes.error || institucionRes.error) {
+      const firstError = clientesRes.error ?? tiposRes.error ?? especialidadRes.error ?? institucionRes.error;
+      if (hasCachedCatalogs) {
+        setMessage('Mostrando catalogos locales. No se pudo sincronizar con Supabase.');
+      } else {
+        setMessage(`Error cargando catalogos: ${firstError?.message ?? 'error desconocido'}`);
+      }
       setLoadingCatalogs(false);
-      setMessage(`Error cargando catalogos: ${String(error)}`);
-    });
+      return;
+    }
+
+    const clientesRows = mapSupabaseClienteRows(clientesRes.data);
+    const tiposRows = mapSupabaseCatalogRows(tiposRes.data);
+    const especialidadRows = mapSupabaseCatalogRows(especialidadRes.data);
+    const institucionRows = mapSupabaseCatalogRows(institucionRes.data);
+
+    setClientes(mapRowsToOptions(clientesRows));
+    setTiposTrabajo(mapRowsToOptions(tiposRows));
+    setEspecialidades(mapRowsToOptions(especialidadRows));
+    setInstituciones(mapRowsToOptions(institucionRows));
+    setLoadingCatalogs(false);
+
+    try {
+      await Promise.all([
+        replaceCachedClientesConTelefono(clientesRows),
+        replaceCachedCatalogo('tipo_trabajo', tiposRows),
+        replaceCachedCatalogo('especialidad', especialidadRows),
+        replaceCachedCatalogo('institucion', institucionRows),
+      ]);
+    } catch (cacheError) {
+      console.warn('No se pudo actualizar cache local de catalogos.', cacheError);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadCatalogs().catch((error) => {
+        setLoadingCatalogs(false);
+        setMessage(`Error cargando catalogos: ${String(error)}`);
+      });
+    }, [loadCatalogs])
+  );
 
   const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     if (event.type === 'dismissed') {

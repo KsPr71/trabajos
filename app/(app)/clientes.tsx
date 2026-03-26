@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { mapSupabaseClienteRow, upsertCachedClienteConTelefono } from '@/lib/catalogos-cache';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
 
@@ -42,18 +43,31 @@ export default function ClientesScreen() {
     setLoading(true);
     setMessage(null);
 
-    const { error } = await supabase.from('clientes').insert({
-      nombre: cleanNombre,
-      fecha_nacimiento: cleanFecha || null,
-      direccion: cleanDireccion || null,
-      telefono: cleanTelefono || null,
-    });
+    const { data, error } = await supabase
+      .from('clientes')
+      .insert({
+        nombre: cleanNombre,
+        fecha_nacimiento: cleanFecha || null,
+        direccion: cleanDireccion || null,
+        telefono: cleanTelefono || null,
+      })
+      .select('id,nombre,telefono,created_at')
+      .maybeSingle();
 
     setLoading(false);
 
-    if (error) {
-      setMessage(`Error: ${error.message}`);
+    if (error || !data) {
+      setMessage(`Error: ${error?.message ?? 'No se pudo crear el cliente.'}`);
       return;
+    }
+
+    const cachedItem = mapSupabaseClienteRow(data);
+    if (cachedItem) {
+      try {
+        await upsertCachedClienteConTelefono(cachedItem);
+      } catch (cacheError) {
+        console.warn('No se pudo actualizar cache local de clientes.', cacheError);
+      }
     }
 
     setNombre('');

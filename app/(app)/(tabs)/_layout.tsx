@@ -19,15 +19,31 @@ export default function TabsLayout() {
         },
         tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
-        title: route.name === 'trabajos' ? 'Trabajos' : 'Dashboard',
+        title: getRouteTitle(route.name),
         tabBarIcon: ({ color, size }) => (
-          <Ionicons
-            name={route.name === 'trabajos' ? 'briefcase-outline' : 'home-outline'}
-            size={size}
-            color={color}
-          />
+          <Ionicons name={getRouteIcon(route.name)} size={size} color={color} />
         ),
       })}
     />
   );
+}
+
+function getRouteTitle(routeName: string) {
+  if (routeName === 'trabajos') {
+    return 'Trabajos';
+  }
+  if (routeName === 'clientes-contacto') {
+    return 'Clientes';
+  }
+  return 'Dashboard';
+}
+
+function getRouteIcon(routeName: string): keyof typeof Ionicons.glyphMap {
+  if (routeName === 'trabajos') {
+    return 'briefcase-outline';
+  }
+  if (routeName === 'clientes-contacto') {
+    return 'people-outline';
+  }
+  return 'home-outline';
 }

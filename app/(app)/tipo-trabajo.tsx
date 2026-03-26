@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { mapSupabaseCatalogRow, upsertCachedCatalogo } from '@/lib/catalogos-cache';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
 
@@ -34,15 +35,26 @@ export default function TipoTrabajoScreen() {
     setLoading(true);
     setMessage(null);
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('tipo_trabajo')
-      .insert({ nombre: cleanNombre, precio: parsedPrecio });
+      .insert({ nombre: cleanNombre, precio: parsedPrecio })
+      .select('id,nombre,created_at')
+      .maybeSingle();
 
     setLoading(false);
 
-    if (error) {
-      setMessage(`Error: ${error.message}`);
+    if (error || !data) {
+      setMessage(`Error: ${error?.message ?? 'No se pudo crear el tipo de trabajo.'}`);
       return;
+    }
+
+    const cachedItem = mapSupabaseCatalogRow(data);
+    if (cachedItem) {
+      try {
+        await upsertCachedCatalogo('tipo_trabajo', cachedItem);
+      } catch (cacheError) {
+        console.warn('No se pudo actualizar cache local de tipo de trabajo.', cacheError);
+      }
     }
 
     setNombre('');
