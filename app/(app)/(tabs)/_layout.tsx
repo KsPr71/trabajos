@@ -14,6 +14,7 @@ export default function TabsLayout() {
       screenOptions={({ route }) => ({
         headerStyle: { backgroundColor: colors.headerBg },
         headerTintColor: colors.headerText,
+        sceneStyle: { paddingBottom: 14 },
         headerTitleAlign: "left",
         headerLeft: () => (
           <View style={styles.headerLeft}>

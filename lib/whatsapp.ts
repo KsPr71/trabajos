@@ -1,6 +1,6 @@
 import { Linking } from "react-native";
 
-const APP_BRAND_TEXT = "Archei";
+const APP_BRAND_TEXT = "Archei-App";
 
 export function normalizeWhatsAppPhone(rawPhone: string) {
   return rawPhone.replace(/[^\d]/g, "");
@@ -17,21 +17,34 @@ export function buildWhatsAppUrl(phone: string, message?: string) {
 }
 
 export async function openWhatsAppChat(phone: string, message?: string) {
-  const url = buildWhatsAppUrl(phone, message);
-
-  if (!url) {
+  const normalizedPhone = normalizeWhatsAppPhone(phone);
+  if (!normalizedPhone) {
     throw new Error("Telefono invalido para WhatsApp.");
   }
 
-  const canOpen = await Linking.canOpenURL(url);
-  if (!canOpen) {
-    throw new Error("No se pudo abrir WhatsApp en este dispositivo.");
+  const encodedMessage = message ? encodeURIComponent(message) : "";
+  const candidates = [
+    `whatsapp://send?phone=${normalizedPhone}${encodedMessage ? `&text=${encodedMessage}` : ""}`,
+    `https://api.whatsapp.com/send?phone=${normalizedPhone}${encodedMessage ? `&text=${encodedMessage}` : ""}`,
+    `https://wa.me/${normalizedPhone}${encodedMessage ? `?text=${encodedMessage}` : ""}`,
+  ];
+
+  let lastError: unknown = null;
+  for (const url of candidates) {
+    try {
+      await Linking.openURL(url);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  await Linking.openURL(url);
+  throw new Error(
+    `No se pudo abrir WhatsApp en este dispositivo.${lastError ? ` ${String(lastError)}` : ""}`,
+  );
 }
 
 export function buildTrabajoTerminadoWhatsAppMessage(nombreTrabajo: string) {
   const cleanNombre = nombreTrabajo.trim() || "sin nombre";
-  return `Su trabajo -${cleanNombre}- esta terminado y listo para recoger. Por favor, contactar.`;
+  return `${APP_BRAND_TEXT}\nSu trabajo (${cleanNombre}) esta terminado y listo para recoger. Por favor, contactar.`;
 }

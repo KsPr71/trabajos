@@ -101,7 +101,7 @@ type AppThemeProviderProps = {
 };
 
 export function AppThemeProvider({ children }: AppThemeProviderProps) {
-  const [mode, setMode] = useState<ThemeMode>("dark");
+  const [mode, setMode] = useState<ThemeMode>("light");
 
   useEffect(() => {
     let mounted = true;
