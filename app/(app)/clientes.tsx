@@ -1,5 +1,6 @@
-import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -10,12 +11,17 @@ import {
   View,
 } from 'react-native';
 
+import { QuestionSearch } from '@/components/question-search';
 import { mapSupabaseClienteRow, upsertCachedClienteConTelefono } from '@/lib/catalogos-cache';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
+import { useToast } from '@/providers/toast-provider';
+import { openWhatsAppChat } from '@/lib/whatsapp';
 
 export default function ClientesScreen() {
   const { colors } = useAppTheme();
+  const { showToast } = useToast();
+  const navigation = useNavigation();
   const styles = createStyles(colors);
 
   const [nombre, setNombre] = useState('');
@@ -40,6 +46,43 @@ export default function ClientesScreen() {
   const [editDireccion, setEditDireccion] = useState('');
   const [editTelefono, setEditTelefono] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [formExpanded, setFormExpanded] = useState(false);
+
+  const filteredClientes = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) {
+      return clientesRegistrados;
+    }
+    return clientesRegistrados.filter((cliente) =>
+      [
+        cliente.nombre,
+        cliente.telefono ?? '',
+        cliente.direccion ?? '',
+        cliente.fechaNacimiento ?? '',
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [clientesRegistrados, searchText]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={styles.headerSearchWrap}>
+          <QuestionSearch
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Buscar cliente o telefono"
+            inHeader
+            expandedWidth={176}
+          />
+        </View>
+      ),
+      headerRightContainerStyle: { paddingRight: 10 },
+    });
+  }, [navigation, searchText, styles.headerSearchWrap]);
 
   const loadClientesRegistrados = useCallback(async () => {
     setLoadingLista(true);
@@ -208,48 +251,90 @@ export default function ClientesScreen() {
     await loadClientesRegistrados();
   };
 
+  const handleWhatsApp = useCallback(
+    async (cliente: {
+      id: number;
+      nombre: string;
+      fechaNacimiento: string | null;
+      direccion: string | null;
+      telefono: string | null;
+    }) => {
+      const telefonoCliente = cliente.telefono?.trim() ?? '';
+      if (!telefonoCliente) {
+        showToast('Este cliente no tiene telefono.', 'error');
+        return;
+      }
+
+      try {
+        await openWhatsAppChat(
+          telefonoCliente,
+          `Hola ${cliente.nombre}, te escribo sobre tu trabajo.`,
+        );
+      } catch (error) {
+        showToast(`No se pudo abrir WhatsApp: ${String(error)}`, 'error');
+      }
+    },
+    [showToast],
+  );
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.card}>
-        <Text style={styles.title}>Nuevo cliente</Text>
-        <Text style={styles.help}>Campos de la tabla clientes</Text>
+        <View style={styles.accordionSection}>
+          <Pressable
+            onPress={() => setFormExpanded((prev) => !prev)}
+            style={styles.accordionHeader}>
+            <Text style={styles.accordionTitle}>Nuevo cliente</Text>
+            <Ionicons
+              name={formExpanded ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.textPrimary}
+            />
+          </Pressable>
 
-        <TextInput
-          placeholder="Nombre"
-          placeholderTextColor={colors.inputPlaceholder}
-          style={styles.input}
-          value={nombre}
-          onChangeText={setNombre}
-        />
-        <TextInput
-          placeholder="Fecha de nacimiento (YYYY-MM-DD)"
-          placeholderTextColor={colors.inputPlaceholder}
-          style={styles.input}
-          value={fechaNacimiento}
-          onChangeText={setFechaNacimiento}
-        />
-        <TextInput
-          placeholder="Direccion"
-          placeholderTextColor={colors.inputPlaceholder}
-          style={styles.input}
-          value={direccion}
-          onChangeText={setDireccion}
-        />
-        <TextInput
-          placeholder="Telefono"
-          placeholderTextColor={colors.inputPlaceholder}
-          style={styles.input}
-          value={telefono}
-          onChangeText={setTelefono}
-        />
+          {formExpanded ? (
+            <View style={styles.accordionContent}>
+              <Text style={styles.help}>Campos de la tabla clientes</Text>
 
-        <Pressable disabled={loading} onPress={handleCreate} style={styles.button}>
-          {loading ? (
-            <ActivityIndicator color={colors.buttonText} />
-          ) : (
-            <Text style={styles.buttonText}>Guardar cliente</Text>
-          )}
-        </Pressable>
+              <TextInput
+                placeholder="Nombre"
+                placeholderTextColor={colors.inputPlaceholder}
+                style={styles.input}
+                value={nombre}
+                onChangeText={setNombre}
+              />
+              <TextInput
+                placeholder="Fecha de nacimiento (YYYY-MM-DD)"
+                placeholderTextColor={colors.inputPlaceholder}
+                style={styles.input}
+                value={fechaNacimiento}
+                onChangeText={setFechaNacimiento}
+              />
+              <TextInput
+                placeholder="Direccion"
+                placeholderTextColor={colors.inputPlaceholder}
+                style={styles.input}
+                value={direccion}
+                onChangeText={setDireccion}
+              />
+              <TextInput
+                placeholder="Telefono"
+                placeholderTextColor={colors.inputPlaceholder}
+                style={styles.input}
+                value={telefono}
+                onChangeText={setTelefono}
+              />
+
+              <Pressable disabled={loading} onPress={handleCreate} style={styles.button}>
+                {loading ? (
+                  <ActivityIndicator color={colors.buttonText} />
+                ) : (
+                  <Text style={styles.buttonText}>Guardar cliente</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
 
         {message ? <Text style={styles.message}>{message}</Text> : null}
 
@@ -265,9 +350,13 @@ export default function ClientesScreen() {
             <View style={styles.listState}>
               <Text style={styles.listStateText}>No hay clientes registrados.</Text>
             </View>
+          ) : filteredClientes.length === 0 ? (
+            <View style={styles.listState}>
+              <Text style={styles.listStateText}>No hay coincidencias para tu busqueda.</Text>
+            </View>
           ) : (
             <View style={styles.listWrap}>
-              {clientesRegistrados.map((cliente) => (
+              {filteredClientes.map((cliente) => (
                 <View key={cliente.id} style={styles.listItem}>
                   {editingClienteId === cliente.id ? (
                     <View style={styles.editWrap}>
@@ -325,11 +414,23 @@ export default function ClientesScreen() {
                       <Text style={styles.listItemMeta}>
                         {cliente.telefono ? cliente.telefono : 'Sin telefono'}
                       </Text>
-                      <Pressable
-                        onPress={() => handleStartEdit(cliente)}
-                        style={styles.editButton}>
-                        <Text style={styles.editButtonText}>Editar</Text>
-                      </Pressable>
+                      <View style={styles.itemActionsRow}>
+                        <Pressable
+                          onPress={() => handleStartEdit(cliente)}
+                          style={styles.editButton}>
+                          <Text style={styles.editButtonText}>Editar</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleWhatsApp(cliente)}
+                          disabled={!cliente.telefono?.trim()}
+                          style={[
+                            styles.whatsButton,
+                            !cliente.telefono?.trim() ? styles.whatsButtonDisabled : null,
+                          ]}>
+                          <Ionicons name="logo-whatsapp" size={16} color="#FFFFFF" />
+                          <Text style={styles.whatsButtonText}>WhatsApp</Text>
+                        </Pressable>
+                      </View>
                     </>
                   )}
                 </View>
@@ -351,6 +452,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     content: {
       padding: 20,
     },
+    headerSearchWrap: {
+      width: 176,
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+    },
     card: {
       backgroundColor: colors.card,
       borderColor: colors.border,
@@ -359,14 +465,35 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       padding: 18,
       gap: 10,
     },
-    title: {
+    accordionSection: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      overflow: 'hidden',
+    },
+    accordionHeader: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 8,
+    },
+    accordionTitle: {
       color: colors.textPrimary,
-      fontSize: 28,
+      fontSize: 18,
       fontWeight: '800',
+      flex: 1,
+    },
+    accordionContent: {
+      paddingHorizontal: 12,
+      paddingBottom: 12,
+      gap: 10,
     },
     help: {
       color: colors.textSecondary,
-      marginBottom: 4,
+      marginTop: 2,
     },
     input: {
       backgroundColor: colors.inputBg,
@@ -439,14 +566,14 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       fontWeight: '600',
     },
     editButton: {
-      alignSelf: 'flex-start',
-      marginTop: 6,
       borderRadius: 10,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.card,
       paddingHorizontal: 10,
       paddingVertical: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     editButtonText: {
       color: colors.textPrimary,
@@ -497,6 +624,30 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     cancelButtonText: {
       color: colors.textPrimary,
       fontSize: 13,
+      fontWeight: '700',
+    },
+    itemActionsRow: {
+      marginTop: 6,
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'center',
+    },
+    whatsButton: {
+      borderRadius: 10,
+      backgroundColor: '#25D366',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    whatsButtonDisabled: {
+      opacity: 0.45,
+    },
+    whatsButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
       fontWeight: '700',
     },
   });

@@ -9,6 +9,10 @@ import {
 } from "react-native";
 
 import {
+  DashboardGananciasMensualesCard,
+  GananciaMensualItem,
+} from "@/components/dashboard-ganancias-mensuales-card";
+import {
   DashboardProximasEntregasCard,
   EntregasMesGroup,
 } from "@/components/dashboard-proximas-entregas-card";
@@ -52,6 +56,9 @@ export default function DashboardScreen() {
     recibidas: 0,
     total: 0,
   });
+  const [gananciasPorMes, setGananciasPorMes] = useState<GananciaMensualItem[]>(
+    [],
+  );
   const [entregasPorMes, setEntregasPorMes] = useState<EntregasMesGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -67,7 +74,7 @@ export default function DashboardScreen() {
     const { data, error } = await supabase
       .from("trabajos")
       .select(
-        "nombre_trabajo,fecha_entrega,estado,tipo_trabajo:tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,precio)",
+        "nombre_trabajo,fecha_entrega,estado,precio_aplicado,tipo_trabajo:tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,precio)",
       );
 
     if (error) {
@@ -78,6 +85,7 @@ export default function DashboardScreen() {
 
     setResumenPorTipo(buildResumenPorTipo(data));
     setGanancias(buildGanancias(data));
+    setGananciasPorMes(buildGananciasPorMes(data));
     setEntregasPorMes(buildEntregasPorMes(data));
     setLoading(false);
   }, []);
@@ -179,7 +187,7 @@ export default function DashboardScreen() {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Ganancias</Text>
         <Text style={styles.sectionSubtitle}>
-          Ganancias esperadas y recibidas.
+          Entregados usan precio aplicado en su fecha de entrega.
         </Text>
 
         {loading ? (
@@ -216,6 +224,12 @@ export default function DashboardScreen() {
           </View>
         )}
       </View>
+
+      <DashboardGananciasMensualesCard
+        loading={loading}
+        errorMessage={errorMessage}
+        items={gananciasPorMes}
+      />
 
       <DashboardProximasEntregasCard
         loading={loading}
@@ -466,16 +480,17 @@ function buildGanancias(rows: unknown): GananciasResumen {
   for (const row of rows) {
     const typedRow = row as {
       estado?: string;
+      precio_aplicado?: unknown;
       tipo_trabajo?: unknown;
     };
 
     const estado = parseEstado(typedRow.estado);
-    const precio = getTipoTrabajoPrecio(typedRow.tipo_trabajo);
 
     if (estado === "entregado") {
-      recibidas += precio;
+      const precioAplicado = parsePrecioNullable(typedRow.precio_aplicado);
+      recibidas += precioAplicado ?? getTipoTrabajoPrecio(typedRow.tipo_trabajo);
     } else {
-      esperadas += precio;
+      esperadas += getTipoTrabajoPrecio(typedRow.tipo_trabajo);
     }
   }
 
@@ -506,6 +521,17 @@ function parsePrecio(value: unknown) {
   return parsed;
 }
 
+function parsePrecioNullable(value: unknown) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
 function formatMoney(value: number) {
   const abs = Math.abs(value);
   const [integerPart, decimalPart] = abs.toFixed(2).split(".");
@@ -515,6 +541,62 @@ function formatMoney(value: number) {
   );
   const sign = value < 0 ? "-" : "";
   return `${sign}$${integerWithSeparator},${decimalPart}`;
+}
+
+function buildGananciasPorMes(rows: unknown): GananciaMensualItem[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  const grouped = new Map<
+    string,
+    { key: string; mesLabel: string; esperadas: number; recibidas: number; total: number }
+  >();
+
+  for (const row of rows) {
+    const typedRow = row as {
+      estado?: string;
+      fecha_entrega?: string | null;
+      precio_aplicado?: unknown;
+      tipo_trabajo?: unknown;
+    };
+
+    if (!typedRow.fecha_entrega) {
+      continue;
+    }
+
+    const fechaEntrega = parseDateISO(String(typedRow.fecha_entrega));
+    if (!fechaEntrega) {
+      continue;
+    }
+
+    const year = fechaEntrega.getFullYear();
+    const month = fechaEntrega.getMonth();
+    const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const mesLabel = `${MONTH_NAMES_ES[month]} ${year}`;
+    const estado = parseEstado(typedRow.estado);
+
+    const current = grouped.get(key) ?? {
+      key,
+      mesLabel,
+      esperadas: 0,
+      recibidas: 0,
+      total: 0,
+    };
+
+    if (estado === "entregado") {
+      const precioAplicado = parsePrecioNullable(typedRow.precio_aplicado);
+      current.recibidas +=
+        precioAplicado ?? getTipoTrabajoPrecio(typedRow.tipo_trabajo);
+    } else {
+      current.esperadas += getTipoTrabajoPrecio(typedRow.tipo_trabajo);
+    }
+
+    current.total = current.esperadas + current.recibidas;
+    grouped.set(key, current);
+  }
+
+  return Array.from(grouped.values()).sort((a, b) => a.key.localeCompare(b.key));
 }
 
 function buildEntregasPorMes(rows: unknown): EntregasMesGroup[] {

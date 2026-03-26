@@ -274,7 +274,7 @@ export default function EditarTrabajoScreen() {
 
     if (estado === 'entregado') {
       showToast('Trabajo marcado como entregado.', 'success');
-      router.replace('/(app)/trabajos-entregados');
+      router.replace('/(app)/(tabs)/trabajos-entregados');
       return;
     }
 

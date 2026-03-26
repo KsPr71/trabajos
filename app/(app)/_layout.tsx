@@ -1,12 +1,13 @@
+import { Ionicons } from "@expo/vector-icons";
 import {
   DrawerContentScrollView,
   DrawerItemList,
 } from "@react-navigation/drawer";
-import { Ionicons } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
+import Developer from "@/components/ui/dev";
 import { useAuth } from "@/providers/auth-provider";
 import { useAppTheme } from "@/providers/theme-provider";
 
@@ -20,7 +21,6 @@ const drawerLabels: Record<string, string> = {
   ajustes: "Ajustes",
   "nuevo-trabajo": "Nuevo trabajo",
   "editar-trabajo": "Editar trabajo",
-  "trabajos-entregados": "Trabajos entregados",
 };
 
 export default function AppLayout() {
@@ -57,11 +57,16 @@ export default function AppLayout() {
           >
             <View style={styles.welcomeRow}>
               <View style={styles.welcomeTextBlock}>
-                <Text style={[styles.welcomeTitle, { color: colors.textPrimary }]}>
+                <Text
+                  style={[styles.welcomeTitle, { color: colors.textPrimary }]}
+                >
                   Bienvenido
                 </Text>
                 <Text
-                  style={[styles.welcomeSubtitle, { color: colors.textSecondary }]}
+                  style={[
+                    styles.welcomeSubtitle,
+                    { color: colors.textSecondary },
+                  ]}
                 >
                   {session.user.email ?? "usuario"}
                 </Text>
@@ -90,6 +95,9 @@ export default function AppLayout() {
           >
             <DrawerItemList {...props} />
           </View>
+          <View>
+            <Developer />
+          </View>
         </DrawerContentScrollView>
       )}
       screenOptions={({ route }) => ({
@@ -102,7 +110,11 @@ export default function AppLayout() {
         title: drawerLabels[route.name] ?? route.name,
         drawerLabel: drawerLabels[route.name] ?? route.name,
         drawerIcon: ({ color, size }) => (
-          <Ionicons name={getDrawerIcon(route.name)} size={size} color={color} />
+          <Ionicons
+            name={getDrawerIcon(route.name)}
+            size={size}
+            color={color}
+          />
         ),
         drawerItemStyle:
           route.name === "nuevo-trabajo" || route.name === "editar-trabajo"
@@ -135,9 +147,6 @@ function getDrawerIcon(routeName: string): keyof typeof Ionicons.glyphMap {
   }
   if (routeName === "ajustes") {
     return "settings-outline";
-  }
-  if (routeName === "trabajos-entregados") {
-    return "checkmark-done-outline";
   }
   if (routeName === "nuevo-trabajo") {
     return "add-circle-outline";

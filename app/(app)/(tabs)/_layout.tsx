@@ -1,8 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
-import { DrawerToggleButton } from '@react-navigation/drawer';
-import { Tabs } from 'expo-router';
+import { useAppTheme } from "@/providers/theme-provider";
+import { Ionicons } from "@expo/vector-icons";
+import { DrawerToggleButton } from "@react-navigation/drawer";
+import { Tabs } from "expo-router";
+import { StyleSheet, View } from "react-native";
 
-import { useAppTheme } from '@/providers/theme-provider';
+import Logo from "@/components/ui/Logo";
 
 export default function TabsLayout() {
   const { colors } = useAppTheme();
@@ -12,7 +14,13 @@ export default function TabsLayout() {
       screenOptions={({ route }) => ({
         headerStyle: { backgroundColor: colors.headerBg },
         headerTintColor: colors.headerText,
-        headerLeft: () => <DrawerToggleButton tintColor={colors.headerText} />,
+        headerTitleAlign: "left",
+        headerLeft: () => (
+          <View style={styles.headerLeft}>
+            <DrawerToggleButton tintColor={colors.headerText} />
+            <Logo size={24} style={styles.headerLogo} />
+          </View>
+        ),
         tabBarStyle: {
           backgroundColor: colors.tabBg,
           borderTopColor: colors.tabBorder,
@@ -29,21 +37,33 @@ export default function TabsLayout() {
 }
 
 function getRouteTitle(routeName: string) {
-  if (routeName === 'trabajos') {
-    return 'Trabajos';
+  if (routeName === "trabajos") {
+    return "Trabajos";
   }
-  if (routeName === 'clientes-contacto') {
-    return 'Clientes';
+  if (routeName === "trabajos-entregados") {
+    return "Entregados";
   }
-  return 'Dashboard';
+  return "Dashboard";
 }
 
 function getRouteIcon(routeName: string): keyof typeof Ionicons.glyphMap {
-  if (routeName === 'trabajos') {
-    return 'briefcase-outline';
+  if (routeName === "trabajos") {
+    return "briefcase-outline";
   }
-  if (routeName === 'clientes-contacto') {
-    return 'people-outline';
+  if (routeName === "trabajos-entregados") {
+    return "checkmark-done-outline";
   }
-  return 'home-outline';
+  return "home-outline";
 }
+
+const styles = StyleSheet.create({
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerLogo: {
+    marginLeft: -4,
+    marginRight: 8,
+    borderRadius: 6,
+  },
+});
