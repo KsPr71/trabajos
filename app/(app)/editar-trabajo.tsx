@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { ComboBox, ComboOption } from '@/components/ui/combobox';
+import { upsertCachedTrabajo } from '@/lib/trabajos-cache';
 import { supabase } from '@/lib/supabase';
 import { ThemeColors, useAppTheme } from '@/providers/theme-provider';
 import { useToast } from '@/providers/toast-provider';
@@ -174,7 +175,7 @@ export default function EditarTrabajoScreen() {
     setLoadingSubmit(true);
     setMessage(null);
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('trabajos')
       .update({
         nombre_trabajo: cleanNombre,
@@ -186,14 +187,32 @@ export default function EditarTrabajoScreen() {
         fecha_entrega: entrega ? formatDateISO(entrega) : null,
         estado,
       })
-      .eq('id', trabajoId);
+      .eq('id', trabajoId)
+      .select('id')
+      .maybeSingle();
 
     setLoadingSubmit(false);
 
-    if (error) {
-      setMessage(`Error: ${error.message}`);
+    if (error || !data) {
+      const reason = error?.message ?? 'No se pudo actualizar el trabajo (sin filas afectadas).';
+      setMessage(`Error: ${reason}`);
       showToast('No se pudo actualizar el trabajo.', 'error');
       return;
+    }
+
+    try {
+      await upsertCachedTrabajo({
+        id: trabajoId,
+        nombreTrabajo: cleanNombre,
+        autor: getOptionLabel(clientes, clienteId, 'Sin autor'),
+        especialidad: getOptionLabel(especialidades, especialidadId, 'Sin especialidad'),
+        tipoTrabajo: getOptionLabel(tiposTrabajo, tipoTrabajoId, 'Sin tipo'),
+        fechaEntrega: entrega ? formatDateISO(entrega) : null,
+        estado,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (cacheError) {
+      console.warn('No se pudo actualizar cache local desde edicion.', cacheError);
     }
 
     if (estado === 'entregado') {
@@ -393,6 +412,13 @@ function mapRowsToOptions(rows: unknown): ComboOption[] {
       };
     })
     .filter((item) => Number.isFinite(item.id) && item.label.length > 0);
+}
+
+function getOptionLabel(options: ComboOption[], optionId: number | null, fallback: string) {
+  if (!optionId) {
+    return fallback;
+  }
+  return options.find((option) => option.id === optionId)?.label ?? fallback;
 }
 
 function parseEstado(rawValue: unknown): EstadoTrabajo {

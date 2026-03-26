@@ -54,8 +54,8 @@ export default function TrabajosScreen() {
       const cachedVisible = cachedRowsAll.filter(
         (item) => item.estado !== "entregado",
       );
-      if (cachedVisible.length > 0) {
-        setTrabajos(cachedVisible);
+      setTrabajos(cachedVisible);
+      if (cachedRowsAll.length > 0) {
         const lastSync = await getLastSyncAt();
         setSyncInfo(
           lastSync
@@ -89,14 +89,7 @@ export default function TrabajosScreen() {
     const mappedVisible = mappedAll.filter(
       (item) => item.estado !== "entregado",
     );
-    const cachedVisible = cachedRowsAll.filter(
-      (item) => item.estado !== "entregado",
-    );
-    const changed = !areTrabajosEqual(cachedVisible, mappedVisible);
-
-    if (changed) {
-      setTrabajos(mappedVisible);
-    }
+    setTrabajos(mappedVisible);
 
     try {
       await replaceCachedTrabajos(mappedAll as CachedTrabajo[]);
@@ -244,34 +237,6 @@ function mapTrabajos(rows: unknown): TrabajoItem[] {
     .filter(
       (item) => Number.isFinite(item.id) && item.nombreTrabajo.length > 0,
     );
-}
-
-function areTrabajosEqual(
-  previousRows: TrabajoItem[],
-  nextRows: TrabajoItem[],
-) {
-  if (previousRows.length !== nextRows.length) {
-    return false;
-  }
-
-  for (let index = 0; index < previousRows.length; index += 1) {
-    const previous = previousRows[index];
-    const next = nextRows[index];
-
-    if (
-      previous.id !== next.id ||
-      previous.nombreTrabajo !== next.nombreTrabajo ||
-      previous.autor !== next.autor ||
-      previous.especialidad !== next.especialidad ||
-      previous.tipoTrabajo !== next.tipoTrabajo ||
-      previous.fechaEntrega !== next.fechaEntrega ||
-      previous.estado !== next.estado
-    ) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 function getRelationName(value: unknown, fallback: string) {

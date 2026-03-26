@@ -153,6 +153,38 @@ export async function replaceCachedTrabajos(trabajos: CachedTrabajo[]): Promise<
   await writeQueue;
 }
 
+export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void> {
+  writeQueue = writeQueue.then(async () => {
+    await ensureSchema();
+    const db = await dbPromise;
+
+    await db.runAsync(
+      `insert into trabajos_cache (id, nombre_trabajo, autor, especialidad, tipo_trabajo, fecha_entrega, estado, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)
+       on conflict(id) do update set
+         nombre_trabajo = excluded.nombre_trabajo,
+         autor = excluded.autor,
+         especialidad = excluded.especialidad,
+         tipo_trabajo = excluded.tipo_trabajo,
+         fecha_entrega = excluded.fecha_entrega,
+         estado = excluded.estado,
+         updated_at = excluded.updated_at`,
+      [
+        trabajo.id,
+        trabajo.nombreTrabajo,
+        trabajo.autor,
+        trabajo.especialidad,
+        trabajo.tipoTrabajo ?? '',
+        trabajo.fechaEntrega ?? null,
+        trabajo.estado,
+        trabajo.updatedAt || new Date().toISOString(),
+      ]
+    );
+  });
+
+  await writeQueue;
+}
+
 export async function getLastSyncAt(): Promise<string | null> {
   await ensureSchema();
   const db = await dbPromise;
