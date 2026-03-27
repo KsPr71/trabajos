@@ -20,22 +20,24 @@ export default function TipoTrabajoScreen() {
 
   const [nombre, setNombre] = useState('');
   const [precio, setPrecio] = useState('');
+  const [color, setColor] = useState(DEFAULT_TIPO_COLOR);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tiposRegistrados, setTiposRegistrados] = useState<
-    { id: number; nombre: string; precio: number }[]
+    { id: number; nombre: string; precio: number; color: string }[]
   >([]);
   const [loadingLista, setLoadingLista] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editNombre, setEditNombre] = useState('');
   const [editPrecio, setEditPrecio] = useState('');
+  const [editColor, setEditColor] = useState(DEFAULT_TIPO_COLOR);
   const [savingEdit, setSavingEdit] = useState(false);
 
   const loadTiposTrabajo = useCallback(async () => {
     setLoadingLista(true);
     const { data, error } = await supabase
       .from('tipo_trabajo')
-      .select('id,nombre,precio')
+      .select('id,nombre,precio,color')
       .order('nombre', { ascending: true });
 
     if (error) {
@@ -49,6 +51,7 @@ export default function TipoTrabajoScreen() {
         id: Number(row.id),
         nombre: String(row.nombre ?? ''),
         precio: Number(row.precio ?? 0),
+        color: parseTipoColor(row.color),
       }))
       .filter((item) => Number.isFinite(item.id) && item.nombre.length > 0);
 
@@ -69,6 +72,7 @@ export default function TipoTrabajoScreen() {
     const cleanNombre = nombre.trim();
     const cleanPrecio = precio.trim().replace(',', '.');
     const parsedPrecio = Number(cleanPrecio);
+    const normalizedColor = normalizeHexColor(color);
 
     if (!cleanNombre) {
       setMessage('El nombre es obligatorio.');
@@ -82,14 +86,18 @@ export default function TipoTrabajoScreen() {
       setMessage('Precio invalido.');
       return;
     }
+    if (!normalizedColor) {
+      setMessage('Color invalido. Usa formato #RRGGBB.');
+      return;
+    }
 
     setLoading(true);
     setMessage(null);
 
     const { data, error } = await supabase
       .from('tipo_trabajo')
-      .insert({ nombre: cleanNombre, precio: parsedPrecio })
-      .select('id,nombre,created_at')
+      .insert({ nombre: cleanNombre, precio: parsedPrecio, color: normalizedColor })
+      .select('id,nombre,created_at,color')
       .maybeSingle();
 
     setLoading(false);
@@ -110,20 +118,23 @@ export default function TipoTrabajoScreen() {
 
     setNombre('');
     setPrecio('');
+    setColor(DEFAULT_TIPO_COLOR);
     setMessage('Tipo de trabajo creado correctamente.');
     await loadTiposTrabajo();
   };
 
-  const handleStartEdit = (item: { id: number; nombre: string; precio: number }) => {
+  const handleStartEdit = (item: { id: number; nombre: string; precio: number; color: string }) => {
     setEditingId(item.id);
     setEditNombre(item.nombre);
     setEditPrecio(String(item.precio));
+    setEditColor(item.color);
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
     setEditNombre('');
     setEditPrecio('');
+    setEditColor(DEFAULT_TIPO_COLOR);
   };
 
   const handleSaveEdit = async () => {
@@ -133,6 +144,7 @@ export default function TipoTrabajoScreen() {
     const cleanNombre = editNombre.trim();
     const cleanPrecio = editPrecio.trim().replace(',', '.');
     const parsedPrecio = Number(cleanPrecio);
+    const normalizedColor = normalizeHexColor(editColor);
 
     if (!cleanNombre) {
       setMessage('El nombre es obligatorio para editar.');
@@ -142,15 +154,19 @@ export default function TipoTrabajoScreen() {
       setMessage('Precio invalido para editar.');
       return;
     }
+    if (!normalizedColor) {
+      setMessage('Color invalido para editar. Usa formato #RRGGBB.');
+      return;
+    }
 
     setSavingEdit(true);
     setMessage(null);
 
     const { data, error } = await supabase
       .from('tipo_trabajo')
-      .update({ nombre: cleanNombre, precio: parsedPrecio })
+      .update({ nombre: cleanNombre, precio: parsedPrecio, color: normalizedColor })
       .eq('id', editingId)
-      .select('id,nombre,created_at')
+      .select('id,nombre,created_at,color')
       .maybeSingle();
 
     setSavingEdit(false);
@@ -195,6 +211,29 @@ export default function TipoTrabajoScreen() {
           keyboardType="decimal-pad"
         />
 
+        <Text style={styles.label}>Color del tipo</Text>
+        <TextInput
+          placeholder="#1F4EA8"
+          placeholderTextColor={colors.inputPlaceholder}
+          style={styles.input}
+          value={color}
+          onChangeText={setColor}
+          autoCapitalize="characters"
+        />
+        <View style={styles.colorPalette}>
+          {COLOR_OPTIONS.map((itemColor) => (
+            <Pressable
+              key={itemColor}
+              onPress={() => setColor(itemColor)}
+              style={[
+                styles.colorSwatch,
+                { backgroundColor: itemColor },
+                normalizeHexColor(color) === itemColor ? styles.colorSwatchActive : null,
+              ]}
+            />
+          ))}
+        </View>
+
         <Pressable disabled={loading} onPress={handleCreate} style={styles.button}>
           {loading ? (
             <ActivityIndicator color={colors.buttonText} />
@@ -238,6 +277,30 @@ export default function TipoTrabajoScreen() {
                         onChangeText={setEditPrecio}
                         keyboardType="decimal-pad"
                       />
+                      <Text style={styles.label}>Color del tipo</Text>
+                      <TextInput
+                        placeholder="#1F4EA8"
+                        placeholderTextColor={colors.inputPlaceholder}
+                        style={styles.editInput}
+                        value={editColor}
+                        onChangeText={setEditColor}
+                        autoCapitalize="characters"
+                      />
+                      <View style={styles.colorPalette}>
+                        {COLOR_OPTIONS.map((itemColor) => (
+                          <Pressable
+                            key={`${tipo.id}-${itemColor}`}
+                            onPress={() => setEditColor(itemColor)}
+                            style={[
+                              styles.colorSwatch,
+                              { backgroundColor: itemColor },
+                              normalizeHexColor(editColor) === itemColor
+                                ? styles.colorSwatchActive
+                                : null,
+                            ]}
+                          />
+                        ))}
+                      </View>
                       <View style={styles.editActions}>
                         <Pressable
                           disabled={savingEdit}
@@ -260,7 +323,15 @@ export default function TipoTrabajoScreen() {
                   ) : (
                     <>
                       <View style={styles.listItemHeader}>
-                        <Text style={styles.listItemName}>{tipo.nombre}</Text>
+                        <View style={styles.listNameWrap}>
+                          <View
+                            style={[
+                              styles.colorDot,
+                              { backgroundColor: tipo.color },
+                            ]}
+                          />
+                          <Text style={styles.listItemName}>{tipo.nombre}</Text>
+                        </View>
                         <Text style={styles.listItemMeta}>{formatPrice(tipo.precio)}</Text>
                       </View>
                       <Pressable
@@ -303,6 +374,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       fontWeight: '800',
       marginBottom: 4,
     },
+    label: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: '700',
+      marginTop: 2,
+    },
     input: {
       backgroundColor: colors.inputBg,
       borderRadius: 12,
@@ -310,6 +387,22 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       paddingVertical: 12,
       color: colors.inputText,
       fontSize: 16,
+    },
+    colorPalette: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    colorSwatch: {
+      width: 28,
+      height: 28,
+      borderRadius: 999,
+      borderWidth: 2,
+      borderColor: '#FFFFFF',
+    },
+    colorSwatchActive: {
+      borderColor: colors.textPrimary,
+      borderWidth: 3,
     },
     button: {
       marginTop: 6,
@@ -368,6 +461,19 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       justifyContent: 'space-between',
       alignItems: 'center',
       gap: 8,
+    },
+    listNameWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flex: 1,
+    },
+    colorDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: '#FFFFFF',
     },
     listItemName: {
       color: colors.inputText,
@@ -450,4 +556,37 @@ function formatPrice(value: number) {
   const [integerPart, decimalPart] = safe.toFixed(2).split('.');
   const grouped = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return `$${grouped},${decimalPart}`;
+}
+
+const DEFAULT_TIPO_COLOR = '#1F4EA8';
+
+const COLOR_OPTIONS = [
+  '#1F4EA8',
+  '#2563EB',
+  '#0EA5E9',
+  '#059669',
+  '#16A34A',
+  '#EAB308',
+  '#D97706',
+  '#DC2626',
+  '#DB2777',
+  '#7C3AED',
+  '#334155',
+  '#0F172A',
+];
+
+function normalizeHexColor(value: string) {
+  const raw = value.trim().toUpperCase();
+  const withHash = raw.startsWith('#') ? raw : `#${raw}`;
+  if (!/^#[0-9A-F]{6}$/.test(withHash)) {
+    return null;
+  }
+  return withHash;
+}
+
+function parseTipoColor(value: unknown) {
+  if (typeof value !== 'string') {
+    return DEFAULT_TIPO_COLOR;
+  }
+  return normalizeHexColor(value) ?? DEFAULT_TIPO_COLOR;
 }

@@ -19,7 +19,7 @@ export default function TabsLayout() {
         headerLeft: () => (
           <View style={styles.headerLeft}>
             <DrawerToggleButton tintColor={colors.headerText} />
-            <Logo size={24} style={styles.headerLogo} />
+            <Logo size={35} style={styles.headerLogo} />
           </View>
         ),
         tabBarStyle: {

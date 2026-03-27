@@ -19,6 +19,9 @@ type QuestionSearchProps = {
   placeholder?: string;
   inHeader?: boolean;
   expandedWidth?: number;
+  collapsedSize?: number;
+  iconSize?: number;
+  onOpenChange?: (isOpen: boolean) => void;
 };
 
 export function QuestionSearch({
@@ -27,10 +30,14 @@ export function QuestionSearch({
   placeholder = "Buscar...",
   inHeader = false,
   expandedWidth,
+  collapsedSize = 48,
+  iconSize = 20,
+  onOpenChange,
 }: QuestionSearchProps) {
   const { colors } = useAppTheme();
-  const styles = createStyles(colors, inHeader);
-  const COLLAPSED_WIDTH = 40;
+  const styles = createStyles(colors, inHeader, collapsedSize);
+  const FAB_SIZE = Math.max(28, collapsedSize);
+  const COLLAPSED_WIDTH = FAB_SIZE;
 
   const [open, setOpen] = useState(false);
   const [showInput, setShowInput] = useState(false);
@@ -69,7 +76,7 @@ export function QuestionSearch({
         setShowInput(false);
       });
     },
-    [expandedWidth, maxWidth, opacityAnim, widthAnim],
+    [COLLAPSED_WIDTH, expandedWidth, maxWidth, opacityAnim, widthAnim],
   );
 
   const handleToggle = () => {
@@ -77,12 +84,14 @@ export function QuestionSearch({
       Keyboard.dismiss();
       onChangeText("");
       setOpen(false);
+      onOpenChange?.(false);
       runAnimation(false);
       return;
     }
 
     setShowInput(true);
     setOpen(true);
+    onOpenChange?.(true);
     runAnimation(true);
   };
 
@@ -107,9 +116,9 @@ export function QuestionSearch({
           style={styles.trigger}
         >
           <Ionicons
-            name="help-circle-outline"
-            size={22}
-            color={colors.buttonText}
+            name="search-outline"
+            size={Math.max(14, iconSize)}
+            color="#FFFFFF"
           />
         </Pressable>
 
@@ -120,7 +129,7 @@ export function QuestionSearch({
               value={value}
               onChangeText={onChangeText}
               placeholder={placeholder}
-              placeholderTextColor={colors.inputPlaceholder}
+              placeholderTextColor="#DCE8FF"
               style={styles.input}
               autoCapitalize="none"
               autoCorrect={false}
@@ -135,30 +144,38 @@ export function QuestionSearch({
 function createStyles(
   colors: ReturnType<typeof useAppTheme>["colors"],
   inHeader: boolean,
+  collapsedSize: number,
 ) {
+  const size = Math.max(30, collapsedSize);
+
   return StyleSheet.create({
     container: {
       marginBottom: inHeader ? 0 : 10,
       alignItems: "flex-end",
     },
     shell: {
-      height: 40,
+      height: size,
       borderRadius: 999,
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
+      backgroundColor: colors.buttonBg,
+      borderWidth: 0,
       borderColor: colors.buttonBg,
       flexDirection: "row",
       alignItems: "center",
       overflow: "hidden",
     },
     trigger: {
-      width: 40,
-      height: 40,
+      width: size,
+      height: size,
       borderRadius: 999,
       backgroundColor: colors.buttonBg,
       alignItems: "center",
       justifyContent: "center",
       flexShrink: 0,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 5,
     },
     inputWrap: {
       flex: 1,
@@ -167,7 +184,7 @@ function createStyles(
     },
     input: {
       backgroundColor: "transparent",
-      color: colors.inputText,
+      color: "#FFFFFF",
       paddingVertical: 8,
       paddingHorizontal: 0,
       fontSize: 15,

@@ -1,33 +1,36 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  LayoutChangeEvent,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { QuestionSearch } from '@/components/question-search';
-import { mapSupabaseClienteRow, upsertCachedClienteConTelefono } from '@/lib/catalogos-cache';
-import { supabase } from '@/lib/supabase';
-import { useAppTheme } from '@/providers/theme-provider';
-import { useToast } from '@/providers/toast-provider';
-import { openWhatsAppChat } from '@/lib/whatsapp';
+import { QuestionSearch } from "@/components/question-search";
+import {
+  mapSupabaseClienteRow,
+  upsertCachedClienteConTelefono,
+} from "@/lib/catalogos-cache";
+import { supabase } from "@/lib/supabase";
+import { openWhatsAppChat } from "@/lib/whatsapp";
+import { useAppTheme } from "@/providers/theme-provider";
+import { useToast } from "@/providers/toast-provider";
 
 export default function ClientesScreen() {
   const { colors } = useAppTheme();
   const { showToast } = useToast();
-  const navigation = useNavigation();
   const styles = createStyles(colors);
 
-  const [nombre, setNombre] = useState('');
-  const [fechaNacimiento, setFechaNacimiento] = useState('');
-  const [direccion, setDireccion] = useState('');
-  const [telefono, setTelefono] = useState('');
+  const [nombre, setNombre] = useState("");
+  const [fechaNacimiento, setFechaNacimiento] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [clientesRegistrados, setClientesRegistrados] = useState<
@@ -41,13 +44,14 @@ export default function ClientesScreen() {
   >([]);
   const [loadingLista, setLoadingLista] = useState(true);
   const [editingClienteId, setEditingClienteId] = useState<number | null>(null);
-  const [editNombre, setEditNombre] = useState('');
-  const [editFechaNacimiento, setEditFechaNacimiento] = useState('');
-  const [editDireccion, setEditDireccion] = useState('');
-  const [editTelefono, setEditTelefono] = useState('');
+  const [editNombre, setEditNombre] = useState("");
+  const [editFechaNacimiento, setEditFechaNacimiento] = useState("");
+  const [editDireccion, setEditDireccion] = useState("");
+  const [editTelefono, setEditTelefono] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState("");
   const [formExpanded, setFormExpanded] = useState(false);
+  const [searchBarWidth, setSearchBarWidth] = useState(0);
 
   const filteredClientes = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -57,42 +61,35 @@ export default function ClientesScreen() {
     return clientesRegistrados.filter((cliente) =>
       [
         cliente.nombre,
-        cliente.telefono ?? '',
-        cliente.direccion ?? '',
-        cliente.fechaNacimiento ?? '',
+        cliente.telefono ?? "",
+        cliente.direccion ?? "",
+        cliente.fechaNacimiento ?? "",
       ]
-        .join(' ')
+        .join(" ")
         .toLowerCase()
-        .includes(query)
+        .includes(query),
     );
   }, [clientesRegistrados, searchText]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={styles.headerSearchWrap}>
-          <QuestionSearch
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Buscar cliente o telefono"
-            inHeader
-            expandedWidth={176}
-          />
-        </View>
-      ),
-      headerRightContainerStyle: { paddingRight: 10 },
-    });
-  }, [navigation, searchText, styles.headerSearchWrap]);
+  const handleToolsLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const width = Math.floor(event.nativeEvent.layout.width);
+      if (width > 0 && width !== searchBarWidth) {
+        setSearchBarWidth(width);
+      }
+    },
+    [searchBarWidth],
+  );
 
   const loadClientesRegistrados = useCallback(async () => {
     setLoadingLista(true);
     const { data, error } = await supabase
-      .from('clientes')
-      .select('id,nombre,fecha_nacimiento,direccion,telefono')
-      .order('nombre', { ascending: true });
+      .from("clientes")
+      .select("id,nombre,fecha_nacimiento,direccion,telefono")
+      .order("nombre", { ascending: true });
 
     if (error) {
-      console.warn('No se pudo cargar la lista de clientes.', error);
+      console.warn("No se pudo cargar la lista de clientes.", error);
       setLoadingLista(false);
       return;
     }
@@ -100,8 +97,10 @@ export default function ClientesScreen() {
     const mapped = (data ?? [])
       .map((row) => ({
         id: Number(row.id),
-        nombre: String(row.nombre ?? ''),
-        fechaNacimiento: row.fecha_nacimiento ? String(row.fecha_nacimiento) : null,
+        nombre: String(row.nombre ?? ""),
+        fechaNacimiento: row.fecha_nacimiento
+          ? String(row.fecha_nacimiento)
+          : null,
         direccion: row.direccion ? String(row.direccion) : null,
         telefono: row.telefono ? String(row.telefono) : null,
       }))
@@ -114,10 +113,10 @@ export default function ClientesScreen() {
   useFocusEffect(
     useCallback(() => {
       loadClientesRegistrados().catch((error) => {
-        console.warn('No se pudo refrescar la lista de clientes.', error);
+        console.warn("No se pudo refrescar la lista de clientes.", error);
         setLoadingLista(false);
       });
-    }, [loadClientesRegistrados])
+    }, [loadClientesRegistrados]),
   );
 
   const handleCreate = async () => {
@@ -127,12 +126,12 @@ export default function ClientesScreen() {
     const cleanTelefono = telefono.trim();
 
     if (!cleanNombre) {
-      setMessage('El nombre es obligatorio.');
+      setMessage("El nombre es obligatorio.");
       return;
     }
 
     if (cleanFecha && !/^\d{4}-\d{2}-\d{2}$/.test(cleanFecha)) {
-      setMessage('Fecha invalida. Usa formato YYYY-MM-DD.');
+      setMessage("Fecha invalida. Usa formato YYYY-MM-DD.");
       return;
     }
 
@@ -140,20 +139,20 @@ export default function ClientesScreen() {
     setMessage(null);
 
     const { data, error } = await supabase
-      .from('clientes')
+      .from("clientes")
       .insert({
         nombre: cleanNombre,
         fecha_nacimiento: cleanFecha || null,
         direccion: cleanDireccion || null,
         telefono: cleanTelefono || null,
       })
-      .select('id,nombre,telefono,created_at')
+      .select("id,nombre,telefono,created_at")
       .maybeSingle();
 
     setLoading(false);
 
     if (error || !data) {
-      setMessage(`Error: ${error?.message ?? 'No se pudo crear el cliente.'}`);
+      setMessage(`Error: ${error?.message ?? "No se pudo crear el cliente."}`);
       return;
     }
 
@@ -162,15 +161,18 @@ export default function ClientesScreen() {
       try {
         await upsertCachedClienteConTelefono(cachedItem);
       } catch (cacheError) {
-        console.warn('No se pudo actualizar cache local de clientes.', cacheError);
+        console.warn(
+          "No se pudo actualizar cache local de clientes.",
+          cacheError,
+        );
       }
     }
 
-    setNombre('');
-    setFechaNacimiento('');
-    setDireccion('');
-    setTelefono('');
-    setMessage('Cliente creado correctamente.');
+    setNombre("");
+    setFechaNacimiento("");
+    setDireccion("");
+    setTelefono("");
+    setMessage("Cliente creado correctamente.");
     await loadClientesRegistrados();
   };
 
@@ -183,17 +185,17 @@ export default function ClientesScreen() {
   }) => {
     setEditingClienteId(cliente.id);
     setEditNombre(cliente.nombre);
-    setEditFechaNacimiento(cliente.fechaNacimiento ?? '');
-    setEditDireccion(cliente.direccion ?? '');
-    setEditTelefono(cliente.telefono ?? '');
+    setEditFechaNacimiento(cliente.fechaNacimiento ?? "");
+    setEditDireccion(cliente.direccion ?? "");
+    setEditTelefono(cliente.telefono ?? "");
   };
 
   const handleCancelEdit = () => {
     setEditingClienteId(null);
-    setEditNombre('');
-    setEditFechaNacimiento('');
-    setEditDireccion('');
-    setEditTelefono('');
+    setEditNombre("");
+    setEditFechaNacimiento("");
+    setEditDireccion("");
+    setEditTelefono("");
   };
 
   const handleSaveEdit = async () => {
@@ -207,11 +209,11 @@ export default function ClientesScreen() {
     const cleanTelefono = editTelefono.trim();
 
     if (!cleanNombre) {
-      setMessage('El nombre es obligatorio para editar.');
+      setMessage("El nombre es obligatorio para editar.");
       return;
     }
     if (cleanFecha && !/^\d{4}-\d{2}-\d{2}$/.test(cleanFecha)) {
-      setMessage('Fecha invalida en edicion. Usa formato YYYY-MM-DD.');
+      setMessage("Fecha invalida en edicion. Usa formato YYYY-MM-DD.");
       return;
     }
 
@@ -219,21 +221,23 @@ export default function ClientesScreen() {
     setMessage(null);
 
     const { data, error } = await supabase
-      .from('clientes')
+      .from("clientes")
       .update({
         nombre: cleanNombre,
         fecha_nacimiento: cleanFecha || null,
         direccion: cleanDireccion || null,
         telefono: cleanTelefono || null,
       })
-      .eq('id', editingClienteId)
-      .select('id,nombre,telefono,created_at')
+      .eq("id", editingClienteId)
+      .select("id,nombre,telefono,created_at")
       .maybeSingle();
 
     setSavingEdit(false);
 
     if (error || !data) {
-      setMessage(`Error actualizando cliente: ${error?.message ?? 'sin filas afectadas.'}`);
+      setMessage(
+        `Error actualizando cliente: ${error?.message ?? "sin filas afectadas."}`,
+      );
       return;
     }
 
@@ -242,11 +246,14 @@ export default function ClientesScreen() {
       try {
         await upsertCachedClienteConTelefono(cachedItem);
       } catch (cacheError) {
-        console.warn('No se pudo actualizar cache local de clientes tras editar.', cacheError);
+        console.warn(
+          "No se pudo actualizar cache local de clientes tras editar.",
+          cacheError,
+        );
       }
     }
 
-    setMessage('Cliente actualizado correctamente.');
+    setMessage("Cliente actualizado correctamente.");
     handleCancelEdit();
     await loadClientesRegistrados();
   };
@@ -259,9 +266,9 @@ export default function ClientesScreen() {
       direccion: string | null;
       telefono: string | null;
     }) => {
-      const telefonoCliente = cliente.telefono?.trim() ?? '';
+      const telefonoCliente = cliente.telefono?.trim() ?? "";
       if (!telefonoCliente) {
-        showToast('Este cliente no tiene telefono.', 'error');
+        showToast("Este cliente no tiene telefono.", "error");
         return;
       }
 
@@ -271,7 +278,7 @@ export default function ClientesScreen() {
           `Hola ${cliente.nombre}, te escribo sobre tu trabajo.`,
         );
       } catch (error) {
-        showToast(`No se pudo abrir WhatsApp: ${String(error)}`, 'error');
+        showToast(`No se pudo abrir WhatsApp: ${String(error)}`, "error");
       }
     },
     [showToast],
@@ -280,13 +287,28 @@ export default function ClientesScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.card}>
+        <View style={styles.toolsRow} onLayout={handleToolsLayout}>
+          <View style={styles.searchWrap}>
+            <QuestionSearch
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder="Buscar cliente o telefono"
+              inHeader
+              expandedWidth={searchBarWidth > 0 ? searchBarWidth : undefined}
+              collapsedSize={34}
+              iconSize={18}
+            />
+          </View>
+        </View>
+
         <View style={styles.accordionSection}>
           <Pressable
             onPress={() => setFormExpanded((prev) => !prev)}
-            style={styles.accordionHeader}>
+            style={styles.accordionHeader}
+          >
             <Text style={styles.accordionTitle}>Nuevo cliente</Text>
             <Ionicons
-              name={formExpanded ? 'chevron-up' : 'chevron-down'}
+              name={formExpanded ? "chevron-up" : "chevron-down"}
               size={18}
               color={colors.textPrimary}
             />
@@ -325,7 +347,11 @@ export default function ClientesScreen() {
                 onChangeText={setTelefono}
               />
 
-              <Pressable disabled={loading} onPress={handleCreate} style={styles.button}>
+              <Pressable
+                disabled={loading}
+                onPress={handleCreate}
+                style={styles.button}
+              >
                 {loading ? (
                   <ActivityIndicator color={colors.buttonText} />
                 ) : (
@@ -348,11 +374,15 @@ export default function ClientesScreen() {
             </View>
           ) : clientesRegistrados.length === 0 ? (
             <View style={styles.listState}>
-              <Text style={styles.listStateText}>No hay clientes registrados.</Text>
+              <Text style={styles.listStateText}>
+                No hay clientes registrados.
+              </Text>
             </View>
           ) : filteredClientes.length === 0 ? (
             <View style={styles.listState}>
-              <Text style={styles.listStateText}>No hay coincidencias para tu busqueda.</Text>
+              <Text style={styles.listStateText}>
+                No hay coincidencias para tu busqueda.
+              </Text>
             </View>
           ) : (
             <View style={styles.listWrap}>
@@ -393,7 +423,8 @@ export default function ClientesScreen() {
                         <Pressable
                           disabled={savingEdit}
                           onPress={handleSaveEdit}
-                          style={styles.saveButton}>
+                          style={styles.saveButton}
+                        >
                           {savingEdit ? (
                             <ActivityIndicator color={colors.buttonText} />
                           ) : (
@@ -403,7 +434,8 @@ export default function ClientesScreen() {
                         <Pressable
                           disabled={savingEdit}
                           onPress={handleCancelEdit}
-                          style={styles.cancelButton}>
+                          style={styles.cancelButton}
+                        >
                           <Text style={styles.cancelButtonText}>Cancelar</Text>
                         </Pressable>
                       </View>
@@ -412,12 +444,13 @@ export default function ClientesScreen() {
                     <>
                       <Text style={styles.listItemName}>{cliente.nombre}</Text>
                       <Text style={styles.listItemMeta}>
-                        {cliente.telefono ? cliente.telefono : 'Sin telefono'}
+                        {cliente.telefono ? cliente.telefono : "Sin telefono"}
                       </Text>
                       <View style={styles.itemActionsRow}>
                         <Pressable
                           onPress={() => handleStartEdit(cliente)}
-                          style={styles.editButton}>
+                          style={styles.editButton}
+                        >
                           <Text style={styles.editButtonText}>Editar</Text>
                         </Pressable>
                         <Pressable
@@ -425,9 +458,16 @@ export default function ClientesScreen() {
                           disabled={!cliente.telefono?.trim()}
                           style={[
                             styles.whatsButton,
-                            !cliente.telefono?.trim() ? styles.whatsButtonDisabled : null,
-                          ]}>
-                          <Ionicons name="logo-whatsapp" size={16} color="#FFFFFF" />
+                            !cliente.telefono?.trim()
+                              ? styles.whatsButtonDisabled
+                              : null,
+                          ]}
+                        >
+                          <Ionicons
+                            name="logo-whatsapp"
+                            size={16}
+                            color="#FFFFFF"
+                          />
                           <Text style={styles.whatsButtonText}>WhatsApp</Text>
                         </Pressable>
                       </View>
@@ -443,7 +483,7 @@ export default function ClientesScreen() {
   );
 }
 
-function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
+function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -452,10 +492,15 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     content: {
       padding: 20,
     },
-    headerSearchWrap: {
-      width: 176,
-      alignItems: 'flex-end',
-      justifyContent: 'center',
+    toolsRow: {
+      minHeight: 34,
+      justifyContent: "center",
+      marginBottom: 10,
+    },
+    searchWrap: {
+      position: "absolute",
+      top: 0,
+      right: 0,
     },
     card: {
       backgroundColor: colors.card,
@@ -470,20 +515,20 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderColor: colors.border,
       borderRadius: 12,
       backgroundColor: colors.card,
-      overflow: 'hidden',
+      overflow: "hidden",
     },
     accordionHeader: {
       paddingHorizontal: 14,
       paddingVertical: 12,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
       gap: 8,
     },
     accordionTitle: {
       color: colors.textPrimary,
       fontSize: 18,
-      fontWeight: '800',
+      fontWeight: "800",
       flex: 1,
     },
     accordionContent: {
@@ -507,14 +552,14 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       marginTop: 6,
       borderRadius: 12,
       backgroundColor: colors.buttonBg,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       paddingVertical: 13,
     },
     buttonText: {
       color: colors.buttonText,
       fontSize: 15,
-      fontWeight: '700',
+      fontWeight: "700",
     },
     message: {
       color: colors.textPrimary,
@@ -527,7 +572,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     listTitle: {
       color: colors.textPrimary,
       fontSize: 16,
-      fontWeight: '800',
+      fontWeight: "800",
     },
     listState: {
       borderWidth: 1,
@@ -535,13 +580,13 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderRadius: 12,
       backgroundColor: colors.inputBg,
       padding: 12,
-      alignItems: 'center',
+      alignItems: "center",
       gap: 8,
     },
     listStateText: {
       color: colors.textSecondary,
       fontSize: 13,
-      textAlign: 'center',
+      textAlign: "center",
     },
     listWrap: {
       gap: 8,
@@ -558,12 +603,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     listItemName: {
       color: colors.inputText,
       fontSize: 14,
-      fontWeight: '700',
+      fontWeight: "700",
     },
     listItemMeta: {
       color: colors.textSecondary,
       fontSize: 12,
-      fontWeight: '600',
+      fontWeight: "600",
     },
     editButton: {
       borderRadius: 10,
@@ -572,13 +617,13 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       backgroundColor: colors.card,
       paddingHorizontal: 10,
       paddingVertical: 6,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
     },
     editButtonText: {
       color: colors.textPrimary,
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: "700",
     },
     editWrap: {
       gap: 8,
@@ -594,7 +639,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       fontSize: 14,
     },
     editActions: {
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: 8,
       marginTop: 2,
     },
@@ -602,14 +647,14 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       flex: 1,
       borderRadius: 10,
       backgroundColor: colors.buttonBg,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       paddingVertical: 10,
     },
     saveButtonText: {
       color: colors.buttonText,
       fontSize: 13,
-      fontWeight: '700',
+      fontWeight: "700",
     },
     cancelButton: {
       flex: 1,
@@ -617,38 +662,38 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.card,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       paddingVertical: 10,
     },
     cancelButtonText: {
       color: colors.textPrimary,
       fontSize: 13,
-      fontWeight: '700',
+      fontWeight: "700",
     },
     itemActionsRow: {
       marginTop: 6,
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: 8,
-      alignItems: 'center',
+      alignItems: "center",
     },
     whatsButton: {
       borderRadius: 10,
-      backgroundColor: '#25D366',
+      backgroundColor: "#25D366",
       paddingHorizontal: 10,
       paddingVertical: 6,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
       gap: 6,
     },
     whatsButtonDisabled: {
       opacity: 0.45,
     },
     whatsButtonText: {
-      color: '#FFFFFF',
+      color: "#FFFFFF",
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: "700",
     },
   });
 }

@@ -1,5 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -16,6 +16,10 @@ import {
   DashboardProximasEntregasCard,
   EntregasMesGroup,
 } from "@/components/dashboard-proximas-entregas-card";
+import {
+  getCachedDashboardSnapshot,
+  replaceCachedDashboardSnapshot,
+} from "@/lib/dashboard-cache";
 import { supabase } from "@/lib/supabase";
 import { useAppTheme } from "@/providers/theme-provider";
 
@@ -31,6 +35,13 @@ type GananciasResumen = {
   esperadas: number;
   recibidas: number;
   total: number;
+};
+
+type DashboardPayload = {
+  resumenPorTipo: ResumenTipoEstado[];
+  ganancias: GananciasResumen;
+  gananciasPorMes: GananciaMensualItem[];
+  entregasPorMes: EntregasMesGroup[];
 };
 
 const ESTADO_ORDER: EstadoTrabajo[] = [
@@ -62,33 +73,60 @@ export default function DashboardScreen() {
   const [entregasPorMes, setEntregasPorMes] = useState<EntregasMesGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [syncInfo, setSyncInfo] = useState<string | null>(null);
 
-  const maxTotal = useMemo(() => {
-    return resumenPorTipo.reduce((max, item) => Math.max(max, item.total), 0);
-  }, [resumenPorTipo]);
+  const applyDashboardPayload = useCallback((payload: DashboardPayload) => {
+    setResumenPorTipo(payload.resumenPorTipo);
+    setGanancias(payload.ganancias);
+    setGananciasPorMes(payload.gananciasPorMes);
+    setEntregasPorMes(payload.entregasPorMes);
+  }, []);
 
   const loadResumen = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
+    setSyncInfo(null);
 
-    const { data, error } = await supabase
-      .from("trabajos")
-      .select(
-        "nombre_trabajo,fecha_entrega,estado,precio_aplicado,tipo_trabajo:tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,precio)",
-      );
+    let hasLocalSnapshot = false;
+    try {
+      const cachedSnapshot = await getCachedDashboardSnapshot();
+      const cachedPayload = normalizeDashboardPayload(cachedSnapshot?.payload);
 
-    if (error) {
-      setErrorMessage(error.message);
-      setLoading(false);
+      if (cachedSnapshot && cachedPayload) {
+        applyDashboardPayload(cachedPayload);
+        hasLocalSnapshot = true;
+        setLoading(false);
+        setSyncInfo(
+          `Mostrando cache local. Ultima sincronizacion: ${formatDateTime(cachedSnapshot.updatedAt)}`,
+        );
+      }
+    } catch (cacheError) {
+      console.warn("No se pudo leer cache local del dashboard.", cacheError);
+    }
+
+    const remoteResult = await fetchDashboardPayloadFromSupabase();
+
+    if (!remoteResult.payload) {
+      if (!hasLocalSnapshot) {
+        setErrorMessage(remoteResult.errorMessage ?? "No se pudo cargar el dashboard.");
+        setLoading(false);
+      } else {
+        setSyncInfo("Sin conexion a Supabase. Mostrando datos locales.");
+      }
       return;
     }
 
-    setResumenPorTipo(buildResumenPorTipo(data));
-    setGanancias(buildGanancias(data));
-    setGananciasPorMes(buildGananciasPorMes(data));
-    setEntregasPorMes(buildEntregasPorMes(data));
+    applyDashboardPayload(remoteResult.payload);
+    setErrorMessage(null);
     setLoading(false);
-  }, []);
+    setSyncInfo(`Sincronizado con Supabase: ${formatDateTime(new Date().toISOString())}`);
+
+    try {
+      await replaceCachedDashboardSnapshot(remoteResult.payload);
+    } catch (cacheError) {
+      console.warn("No se pudo actualizar cache local del dashboard.", cacheError);
+    }
+  }, [applyDashboardPayload]);
 
   useFocusEffect(
     useCallback(() => {
@@ -101,6 +139,8 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {syncInfo ? <Text style={styles.syncInfo}>{syncInfo}</Text> : null}
+
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Trabajos por tipo y estado</Text>
         <Text style={styles.sectionSubtitle}>
@@ -151,11 +191,11 @@ export default function DashboardScreen() {
                   <View style={styles.track}>
                     {ESTADO_ORDER.map((estado) => {
                       const estadoCount = item.estadoCounts[estado];
-                      if (estadoCount <= 0 || maxTotal <= 0) {
+                      if (estadoCount <= 0 || item.total <= 0) {
                         return null;
                       }
 
-                      const width = (estadoCount / maxTotal) * 100;
+                      const width = (estadoCount / item.total) * 100;
                       return (
                         <View
                           key={`${item.tipoTrabajo}-${estado}`}
@@ -240,6 +280,200 @@ export default function DashboardScreen() {
   );
 }
 
+async function fetchDashboardPayloadFromSupabase(): Promise<{
+  payload: DashboardPayload | null;
+  errorMessage: string | null;
+}> {
+  const rpcResponse = await supabase.rpc("fn_dashboard_resumen");
+  if (!rpcResponse.error) {
+    const normalized = normalizeDashboardPayload(rpcResponse.data);
+    if (normalized) {
+      return { payload: normalized, errorMessage: null };
+    }
+  }
+
+  const fallbackResponse = await supabase
+    .from("trabajos")
+    .select(
+      "nombre_trabajo,fecha_entrega,estado,precio_aplicado,tipo_trabajo:tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,precio)",
+    );
+
+  if (fallbackResponse.error) {
+    return {
+      payload: null,
+      errorMessage:
+        rpcResponse.error?.message ??
+        fallbackResponse.error.message ??
+        "No se pudo cargar el dashboard.",
+    };
+  }
+
+  return {
+    payload: buildDashboardPayloadFromRows(fallbackResponse.data),
+    errorMessage: null,
+  };
+}
+
+function buildDashboardPayloadFromRows(rows: unknown): DashboardPayload {
+  return {
+    resumenPorTipo: buildResumenPorTipo(rows),
+    ganancias: buildGanancias(rows),
+    gananciasPorMes: buildGananciasPorMes(rows),
+    entregasPorMes: buildEntregasPorMes(rows),
+  };
+}
+
+function normalizeDashboardPayload(rawPayload: unknown): DashboardPayload | null {
+  if (!rawPayload || typeof rawPayload !== "object") {
+    return null;
+  }
+
+  const record = rawPayload as Record<string, unknown>;
+  const resumenPorTipo = normalizeResumenPorTipo(
+    record.resumen_por_tipo ?? record.resumenPorTipo,
+  );
+  const ganancias = normalizeGanancias(record.ganancias);
+  const gananciasPorMes = normalizeGananciasPorMes(
+    record.ganancias_por_mes ?? record.gananciasPorMes,
+  );
+  const entregasPorMes = normalizeEntregasPorMes(
+    record.entregas_por_mes ?? record.entregasPorMes,
+  );
+
+  return {
+    resumenPorTipo,
+    ganancias,
+    gananciasPorMes,
+    entregasPorMes,
+  };
+}
+
+function normalizeResumenPorTipo(value: unknown): ResumenTipoEstado[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const row = item as Record<string, unknown>;
+      const estadoCountsRaw = (row.estado_counts ??
+        row.estadoCounts ??
+        {}) as Record<string, unknown>;
+
+      const tipoTrabajo = String(row.tipo_trabajo ?? row.tipoTrabajo ?? "Sin tipo");
+
+      const estadoCounts: Record<EstadoTrabajo, number> = {
+        creado: toNumber(estadoCountsRaw.creado),
+        en_proceso: toNumber(estadoCountsRaw.en_proceso),
+        terminado: toNumber(estadoCountsRaw.terminado),
+        entregado: toNumber(estadoCountsRaw.entregado),
+      };
+
+      return {
+        tipoTrabajo,
+        total: toNumber(row.total),
+        estadoCounts,
+      };
+    })
+    .filter((item): item is ResumenTipoEstado => Boolean(item))
+    .sort((a, b) => {
+      if (b.total !== a.total) {
+        return b.total - a.total;
+      }
+      return a.tipoTrabajo.localeCompare(b.tipoTrabajo);
+    });
+}
+
+function normalizeGanancias(value: unknown): GananciasResumen {
+  if (!value || typeof value !== "object") {
+    return { esperadas: 0, recibidas: 0, total: 0 };
+  }
+
+  const row = value as Record<string, unknown>;
+  const esperadas = toNumber(row.esperadas);
+  const recibidas = toNumber(row.recibidas);
+  const totalFromPayload = toNumber(row.total);
+  const total = totalFromPayload > 0 ? totalFromPayload : esperadas + recibidas;
+
+  return {
+    esperadas,
+    recibidas,
+    total,
+  };
+}
+
+function normalizeGananciasPorMes(value: unknown): GananciaMensualItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const row = item as Record<string, unknown>;
+      const esperadas = toNumber(row.esperadas);
+      const recibidas = toNumber(row.recibidas);
+      const totalFromPayload = toNumber(row.total);
+
+      return {
+        key: String(row.key ?? ""),
+        mesLabel: String(row.mes_label ?? row.mesLabel ?? ""),
+        esperadas,
+        recibidas,
+        total: totalFromPayload > 0 ? totalFromPayload : esperadas + recibidas,
+      };
+    })
+    .filter(
+      (item): item is GananciaMensualItem =>
+        Boolean(item && item.key.length > 0 && item.mesLabel.length > 0),
+    )
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function normalizeEntregasPorMes(value: unknown): EntregasMesGroup[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const row = item as Record<string, unknown>;
+      const trabajos = Array.isArray(row.trabajos)
+        ? row.trabajos.map((trabajo) => String(trabajo)).filter((trabajo) => trabajo.length > 0)
+        : [];
+
+      return {
+        key: String(row.key ?? ""),
+        mesLabel: String(row.mes_label ?? row.mesLabel ?? ""),
+        trabajos,
+      };
+    })
+    .filter(
+      (item): item is EntregasMesGroup =>
+        Boolean(item && item.key.length > 0 && item.mesLabel.length > 0),
+    )
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function toNumber(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return parsed;
+}
+
 function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
   return StyleSheet.create({
     container: {
@@ -249,6 +483,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
     content: {
       padding: 20,
       gap: 14,
+    },
+    syncInfo: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      paddingHorizontal: 2,
+      marginBottom: -2,
     },
     card: {
       backgroundColor: colors.card,
@@ -649,6 +889,19 @@ function buildEntregasPorMes(rows: unknown): EntregasMesGroup[] {
       ...group,
       trabajos: group.trabajos.sort((a, b) => a.localeCompare(b)),
     }));
+}
+
+function formatDateTime(isoDate: string) {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return isoDate;
+  }
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${day}/${month}/${year} ${hour}:${minute}`;
 }
 
 function parseDateISO(value: string) {

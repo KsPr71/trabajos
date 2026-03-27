@@ -14,6 +14,7 @@ type TrabajoCardProps = {
   autor: string;
   especialidad: string;
   tipoTrabajo: string;
+  tipoTrabajoColor?: string | null;
   fechaEntrega: string | null;
   estado: TrabajoCardEstado;
   onPress: () => void;
@@ -26,6 +27,7 @@ export function TrabajoCard({
   autor,
   especialidad,
   tipoTrabajo,
+  tipoTrabajoColor = null,
   fechaEntrega,
   estado,
   onPress,
@@ -35,14 +37,28 @@ export function TrabajoCard({
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const chip = getEstadoChip(estado, colors);
+  const tipoColor = normalizeHexColor(tipoTrabajoColor);
+  const tipoChipBg = tipoColor ?? colors.inputBg;
+  const tipoChipTextColor = getReadableTextColor(tipoChipBg);
+  const titleBackground = tipoColor
+    ? lightenHexColor(tipoColor, 20)
+    : colors.headerBg;
+  const titleTextColor = getReadableTextColor(titleBackground);
 
   return (
     <Pressable
       onPress={onPress}
       style={[styles.card, accentBorder ? styles.cardWithAccent : null]}
     >
-      <View style={styles.titleContainer}>
-        <Text style={styles.cardTitle}>{nombreTrabajo}</Text>
+      <View
+        style={[
+          styles.titleContainer,
+          { backgroundColor: titleBackground + 30 },
+        ]}
+      >
+        <Text style={[styles.cardTitle, { color: titleTextColor }]}>
+          {nombreTrabajo}
+        </Text>
       </View>
       <View style={styles.body}>
         <Text style={styles.metaText}>
@@ -64,8 +80,16 @@ export function TrabajoCard({
               <Text style={styles.entregaChipText}>Entrega</Text>
             </View>
           ) : null}
-          <View style={styles.tipoChip}>
-            <Text style={styles.tipoChipText}> {tipoTrabajo}</Text>
+          <View
+            style={[
+              styles.tipoChip,
+              { backgroundColor: tipoChipBg, borderColor: tipoChipBg },
+            ]}
+          >
+            <Text style={[styles.tipoChipText, { color: tipoChipTextColor }]}>
+              {" "}
+              {tipoTrabajo}
+            </Text>
           </View>
           <View
             style={[
@@ -123,10 +147,61 @@ function formatFechaEntrega(fechaEntrega: string | null) {
   return `${day}/${month}/${year}`;
 }
 
+function normalizeHexColor(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!/^#[0-9A-Fa-f]{6}$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed.toUpperCase();
+}
+
+function lightenHexColor(hex: string, amount: number) {
+  const clean = hex.replace("#", "");
+  const r = clampChannel(parseInt(clean.slice(0, 2), 16) + amount);
+  const g = clampChannel(parseInt(clean.slice(2, 4), 16) + amount);
+  const b = clampChannel(parseInt(clean.slice(4, 6), 16) + amount);
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function clampChannel(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 255) {
+    return 255;
+  }
+  return Math.round(value);
+}
+
+function toHex(value: number) {
+  return value.toString(16).padStart(2, "0").toUpperCase();
+}
+
+function getReadableTextColor(hexColor: string) {
+  const normalized = normalizeHexColor(hexColor);
+  if (!normalized) {
+    return "#FFFFFF";
+  }
+  const clean = normalized.slice(1);
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 150 ? "#10233F" : "#FFFFFF";
+}
+
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     card: {
       backgroundColor: colors.card,
+
       borderRadius: 16,
       borderWidth: 2,
       borderColor: colors.border,
@@ -139,8 +214,9 @@ function createStyles(colors: ThemeColors) {
       elevation: 4,
     },
     titleContainer: {
-      backgroundColor: colors.headerBg,
-      padding: 16,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      paddingTop: 18,
       borderTopRightRadius: 16,
       borderTopLeftRadius: 16,
     },
@@ -177,7 +253,6 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: 5,
     },
     cardTitle: {
-      color: colors.textPrimary,
       fontSize: 18,
       fontWeight: "700",
     },
@@ -187,15 +262,12 @@ function createStyles(colors: ThemeColors) {
     },
     tipoChip: {
       alignSelf: "flex-start",
-      backgroundColor: colors.inputBg,
-      borderColor: colors.border,
       borderWidth: 1,
       borderRadius: 9999,
       paddingHorizontal: 10,
       paddingVertical: 4,
     },
     tipoChipText: {
-      color: colors.inputText,
       fontSize: 12,
       fontWeight: "700",
     },

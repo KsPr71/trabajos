@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  LayoutChangeEvent,
   Pressable,
   StyleSheet,
   Text,
@@ -30,6 +31,7 @@ type TrabajoItem = {
   autor: string;
   especialidad: string;
   tipoTrabajo: string;
+  tipoTrabajoColor: string | null;
   fechaEntrega: string | null;
   estado: EstadoTrabajo;
   updatedAt: string;
@@ -38,7 +40,6 @@ type TrabajoItem = {
 export default function TrabajosScreen() {
   const { colors } = useAppTheme();
   const router = useRouter();
-  const navigation = useNavigation();
   const styles = createStyles(colors);
 
   const [trabajos, setTrabajos] = useState<TrabajoItem[]>([]);
@@ -46,6 +47,8 @@ export default function TrabajosScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [syncInfo, setSyncInfo] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [searchBarWidth, setSearchBarWidth] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const filteredTrabajos = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -72,22 +75,12 @@ export default function TrabajosScreen() {
     [trabajos],
   );
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={styles.headerSearchWrap}>
-          <QuestionSearch
-            value={searchText}
-            onChangeText={setSearchText}
-            placeholder="Buscar trabajo, autor o tipo"
-            inHeader
-            expandedWidth={176}
-          />
-        </View>
-      ),
-      headerRightContainerStyle: { paddingRight: 10 },
-    });
-  }, [navigation, searchText, styles.headerSearchWrap]);
+  const handleToolsLayout = useCallback((event: LayoutChangeEvent) => {
+    const width = Math.floor(event.nativeEvent.layout.width);
+    if (width > 0 && width !== searchBarWidth) {
+      setSearchBarWidth(width);
+    }
+  }, [searchBarWidth]);
 
   const loadTrabajos = useCallback(async () => {
     setLoading(true);
@@ -117,7 +110,7 @@ export default function TrabajosScreen() {
     const { data, error } = await supabase
       .from("trabajos")
       .select(
-        "id,nombre_trabajo,estado,fecha_entrega,created_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre)",
+        "id,nombre_trabajo,estado,fecha_entrega,created_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,color)",
       )
       .order("created_at", { ascending: false });
 
@@ -168,6 +161,22 @@ export default function TrabajosScreen() {
         </View>
       ) : null}
 
+      <View style={styles.toolsRow} onLayout={handleToolsLayout}>
+        {!searchOpen && syncInfo ? <Text style={styles.syncInfo}>{syncInfo}</Text> : null}
+        <View style={styles.searchWrap}>
+          <QuestionSearch
+            value={searchText}
+            onChangeText={setSearchText}
+            onOpenChange={setSearchOpen}
+            placeholder="Buscar trabajo, autor o tipo"
+            inHeader
+            expandedWidth={searchBarWidth > 0 ? searchBarWidth : undefined}
+            collapsedSize={34}
+            iconSize={18}
+          />
+        </View>
+      </View>
+
       {loading ? (
         <View style={styles.stateCard}>
           <ActivityIndicator color={colors.buttonBg} />
@@ -191,7 +200,6 @@ export default function TrabajosScreen() {
         </View>
       ) : (
         <>
-          {syncInfo ? <Text style={styles.syncInfo}>{syncInfo}</Text> : null}
           <FlatList
             data={filteredTrabajos}
             keyExtractor={(item) => String(item.id)}
@@ -203,6 +211,7 @@ export default function TrabajosScreen() {
                   autor={item.autor}
                   especialidad={item.especialidad}
                   tipoTrabajo={item.tipoTrabajo}
+                  tipoTrabajoColor={item.tipoTrabajoColor}
                   fechaEntrega={item.fechaEntrega}
                   estado={item.estado}
                   accentBorder
@@ -248,6 +257,7 @@ function mapTrabajos(rows: unknown): TrabajoItem[] {
         especialidad?: unknown;
         tipo_trabajo?: unknown;
       };
+      const tipoTrabajoInfo = getTipoTrabajoInfo(typedRow.tipo_trabajo);
 
       return {
         id: Number(typedRow.id),
@@ -257,7 +267,8 @@ function mapTrabajos(rows: unknown): TrabajoItem[] {
           typedRow.especialidad,
           "Sin especialidad",
         ),
-        tipoTrabajo: getRelationName(typedRow.tipo_trabajo, "Sin tipo"),
+        tipoTrabajo: tipoTrabajoInfo.nombre,
+        tipoTrabajoColor: tipoTrabajoInfo.color,
         fechaEntrega: typedRow.fecha_entrega
           ? String(typedRow.fecha_entrega)
           : null,
@@ -282,6 +293,38 @@ function getRelationName(value: unknown, fallback: string) {
   return fallback;
 }
 
+function getTipoTrabajoInfo(value: unknown) {
+  if (Array.isArray(value)) {
+    const first = value[0] as { nombre?: string; color?: string } | undefined;
+    return {
+      nombre: first?.nombre ? String(first.nombre) : "Sin tipo",
+      color: parseColor(first?.color),
+    };
+  }
+  if (value && typeof value === "object") {
+    const record = value as { nombre?: string; color?: string };
+    return {
+      nombre: record.nombre ? String(record.nombre) : "Sin tipo",
+      color: parseColor(record.color),
+    };
+  }
+  return {
+    nombre: "Sin tipo",
+    color: null,
+  };
+}
+
+function parseColor(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!/^#[0-9A-Fa-f]{6}$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed.toUpperCase();
+}
+
 function parseEstado(rawValue: unknown): EstadoTrabajo {
   if (rawValue === "entregado") {
     return "entregado";
@@ -302,10 +345,15 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
       padding: 20,
     },
-    headerSearchWrap: {
-      width: 176,
-      alignItems: "flex-end",
+    toolsRow: {
+      minHeight: 30,
       justifyContent: "center",
+      marginBottom: 10,
+    },
+    searchWrap: {
+      position: "absolute",
+      top: 0,
+      right: 0,
     },
     alertBanner: {
       borderRadius: 12,
@@ -346,8 +394,8 @@ function createStyles(colors: ThemeColors) {
     syncInfo: {
       color: colors.textSecondary,
       fontSize: 12,
-      marginBottom: 10,
       paddingHorizontal: 2,
+      paddingRight: 38,
     },
     fabWrap: {
       position: "absolute",

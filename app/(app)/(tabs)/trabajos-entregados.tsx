@@ -16,6 +16,7 @@ type TrabajoItem = {
   autor: string;
   especialidad: string;
   tipoTrabajo: string;
+  tipoTrabajoColor: string | null;
   fechaEntrega: string | null;
   estado: EstadoTrabajo;
   updatedAt: string;
@@ -59,7 +60,7 @@ export default function TrabajosEntregadosScreen() {
     const { data, error } = await supabase
       .from('trabajos')
       .select(
-        'id,nombre_trabajo,estado,fecha_entrega,created_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre)'
+        'id,nombre_trabajo,estado,fecha_entrega,created_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,color)'
       )
       .order('created_at', { ascending: false });
 
@@ -124,6 +125,7 @@ export default function TrabajosEntregadosScreen() {
                 autor={item.autor}
                 especialidad={item.especialidad}
                 tipoTrabajo={item.tipoTrabajo}
+                tipoTrabajoColor={item.tipoTrabajoColor}
                 fechaEntrega={item.fechaEntrega}
                 estado={item.estado}
                 onPress={() =>
@@ -158,13 +160,15 @@ function mapTrabajos(rows: unknown): TrabajoItem[] {
         especialidad?: unknown;
         tipo_trabajo?: unknown;
       };
+      const tipoTrabajoInfo = getTipoTrabajoInfo(typedRow.tipo_trabajo);
 
       return {
         id: Number(typedRow.id),
         nombreTrabajo: String(typedRow.nombre_trabajo ?? ''),
         autor: getRelationName(typedRow.clientes, 'Sin autor'),
         especialidad: getRelationName(typedRow.especialidad, 'Sin especialidad'),
-        tipoTrabajo: getRelationName(typedRow.tipo_trabajo, 'Sin tipo'),
+        tipoTrabajo: tipoTrabajoInfo.nombre,
+        tipoTrabajoColor: tipoTrabajoInfo.color,
         fechaEntrega: typedRow.fecha_entrega ? String(typedRow.fecha_entrega) : null,
         estado: parseEstado(typedRow.estado),
         updatedAt: String(typedRow.created_at ?? new Date().toISOString()),
@@ -183,6 +187,38 @@ function getRelationName(value: unknown, fallback: string) {
     return record.nombre ? String(record.nombre) : fallback;
   }
   return fallback;
+}
+
+function getTipoTrabajoInfo(value: unknown) {
+  if (Array.isArray(value)) {
+    const first = value[0] as { nombre?: string; color?: string } | undefined;
+    return {
+      nombre: first?.nombre ? String(first.nombre) : 'Sin tipo',
+      color: parseColor(first?.color),
+    };
+  }
+  if (value && typeof value === 'object') {
+    const record = value as { nombre?: string; color?: string };
+    return {
+      nombre: record.nombre ? String(record.nombre) : 'Sin tipo',
+      color: parseColor(record.color),
+    };
+  }
+  return {
+    nombre: 'Sin tipo',
+    color: null,
+  };
+}
+
+function parseColor(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!/^#[0-9A-Fa-f]{6}$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed.toUpperCase();
 }
 
 function parseEstado(rawValue: unknown): EstadoTrabajo {

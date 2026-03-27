@@ -59,6 +59,7 @@ export default function EditarTrabajoScreen() {
   const [clientes, setClientes] = useState<ComboOption[]>([]);
   const [clientesTelefonoById, setClientesTelefonoById] = useState<Record<number, string>>({});
   const [tiposTrabajo, setTiposTrabajo] = useState<ComboOption[]>([]);
+  const [tipoTrabajoColorById, setTipoTrabajoColorById] = useState<Record<number, string>>({});
   const [especialidades, setEspecialidades] = useState<ComboOption[]>([]);
   const [instituciones, setInstituciones] = useState<ComboOption[]>([]);
 
@@ -110,7 +111,10 @@ export default function EditarTrabajoScreen() {
 
     const [clientesRes, tiposRes, especialidadRes, institucionRes, trabajoRes] = await Promise.all([
       supabase.from('clientes').select('id,nombre,telefono,created_at').order('nombre', { ascending: true }),
-      supabase.from('tipo_trabajo').select('id,nombre,created_at').order('nombre', { ascending: true }),
+      supabase
+        .from('tipo_trabajo')
+        .select('id,nombre,color,created_at')
+        .order('nombre', { ascending: true }),
       supabase.from('especialidad').select('id,nombre,created_at').order('nombre', { ascending: true }),
       supabase.from('institucion').select('id,nombre,created_at').order('nombre', { ascending: true }),
       supabase
@@ -150,6 +154,7 @@ export default function EditarTrabajoScreen() {
       setClientes(mapRowsToOptions(clientesRows));
       setClientesTelefonoById(buildClientesTelefonoMap(clientesRows));
       setTiposTrabajo(mapRowsToOptions(tiposRows));
+      setTipoTrabajoColorById(buildTipoTrabajoColorMap(tiposRes.data));
       setEspecialidades(mapRowsToOptions(especialidadRows));
       setInstituciones(mapRowsToOptions(institucionRows));
 
@@ -273,6 +278,7 @@ export default function EditarTrabajoScreen() {
         autor: getOptionLabel(clientes, clienteId, 'Sin autor'),
         especialidad: getOptionLabel(especialidades, especialidadId, 'Sin especialidad'),
         tipoTrabajo: getOptionLabel(tiposTrabajo, tipoTrabajoId, 'Sin tipo'),
+        tipoTrabajoColor: tipoTrabajoId ? tipoTrabajoColorById[tipoTrabajoId] ?? null : null,
         fechaEntrega: entrega ? formatDateISO(entrega) : null,
         estado,
         updatedAt: new Date().toISOString(),
@@ -448,6 +454,37 @@ export default function EditarTrabajoScreen() {
       </View>
     </ScrollView>
   );
+}
+
+function buildTipoTrabajoColorMap(rows: unknown): Record<number, string> {
+  if (!Array.isArray(rows)) {
+    return {};
+  }
+
+  return rows.reduce<Record<number, string>>((acc, row) => {
+    const typedRow = row as { id?: number | string; color?: string | null };
+    const id = Number(typedRow.id);
+    if (!Number.isFinite(id)) {
+      return acc;
+    }
+
+    const color = normalizeHexColor(typedRow.color);
+    if (color) {
+      acc[id] = color;
+    }
+    return acc;
+  }, {});
+}
+
+function normalizeHexColor(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim().toUpperCase();
+  if (!/^#[0-9A-F]{6}$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
 }
 
 type EstadoOptionProps = {
