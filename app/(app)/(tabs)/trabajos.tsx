@@ -13,7 +13,7 @@ import {
 } from "react-native";
 
 import { QuestionSearch } from "@/components/question-search";
-import { TrabajoCard } from "@/components/trabajo-card";
+import { TrabajoCustomCard } from "@/components/ui/custom-card";
 import { supabase } from "@/lib/supabase";
 import {
   CachedTrabajo,
@@ -206,7 +206,7 @@ export default function TrabajosScreen() {
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => {
               return (
-                <TrabajoCard
+                <TrabajoCustomCard
                   nombreTrabajo={item.nombreTrabajo}
                   autor={item.autor}
                   especialidad={item.especialidad}

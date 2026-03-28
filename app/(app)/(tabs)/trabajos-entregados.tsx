@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 
-import { TrabajoCard } from '@/components/trabajo-card';
+import { TrabajoCustomCard } from '@/components/ui/custom-card';
 import { supabase } from '@/lib/supabase';
 import { CachedTrabajo, getCachedTrabajos, getLastSyncAt, replaceCachedTrabajos } from '@/lib/trabajos-cache';
 import { ThemeColors, useAppTheme } from '@/providers/theme-provider';
@@ -120,7 +120,7 @@ export default function TrabajosEntregadosScreen() {
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => (
-              <TrabajoCard
+              <TrabajoCustomCard
                 nombreTrabajo={item.nombreTrabajo}
                 autor={item.autor}
                 especialidad={item.especialidad}
@@ -128,6 +128,7 @@ export default function TrabajosEntregadosScreen() {
                 tipoTrabajoColor={item.tipoTrabajoColor}
                 fechaEntrega={item.fechaEntrega}
                 estado={item.estado}
+                accentBorder
                 onPress={() =>
                   router.push({
                     pathname: '/(app)/editar-trabajo',
