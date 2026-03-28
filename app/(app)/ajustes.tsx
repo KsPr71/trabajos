@@ -1,10 +1,74 @@
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
+import { registerPushTokenForUser } from '@/lib/push-notifications';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/providers/auth-provider';
 import { useAppTheme } from '@/providers/theme-provider';
+import { useToast } from '@/providers/toast-provider';
 
 export default function AjustesScreen() {
   const { isDark, mode, toggleTheme, colors } = useAppTheme();
+  const { session } = useAuth();
+  const { showToast } = useToast();
   const styles = createStyles(colors);
+  const [testingPush, setTestingPush] = useState(false);
+  const [pushDebug, setPushDebug] = useState<string | null>(null);
+
+  const handlePushTest = async () => {
+    const userId = session?.user.id;
+    if (!userId) {
+      showToast('No hay sesion activa para probar push.', 'error');
+      return;
+    }
+
+    setTestingPush(true);
+    setPushDebug(null);
+
+    try {
+      const token = await registerPushTokenForUser(userId);
+      const { data: storedTokenRow, error: tokenReadError } = await supabase
+        .from('device_push_tokens')
+        .select('expo_push_token,last_seen_at')
+        .eq('user_id', userId)
+        .eq('is_active', true)
+        .order('last_seen_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (tokenReadError) {
+        showToast(`No se pudo leer token guardado: ${tokenReadError.message}`, 'error');
+        return;
+      }
+
+      const { error: pushError } = await supabase.functions.invoke('push-trabajo-created', {
+        body: {
+          trabajoNombre: 'Prueba push Archei',
+          fechaEntrega: null,
+        },
+      });
+
+      if (pushError) {
+        showToast(`No se pudo enviar push de prueba: ${pushError.message}`, 'error');
+        return;
+      }
+
+      const tokenToShow = token ?? storedTokenRow?.expo_push_token ?? null;
+      setPushDebug(
+        tokenToShow
+          ? `Token activo: ${tokenToShow.slice(0, 24)}... | Ultimo registro: ${
+              storedTokenRow?.last_seen_at ?? 'sin fecha'
+            }`
+          : 'No se obtuvo token en este entorno (usa Development Build/APK, no Expo Go).'
+      );
+
+      showToast('Push de prueba enviada. Revisa la notificacion en el dispositivo.', 'success');
+    } catch (error) {
+      showToast(`Error en prueba push: ${String(error)}`, 'error');
+    } finally {
+      setTestingPush(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -21,6 +85,24 @@ export default function AjustesScreen() {
             trackColor={{ false: colors.tabInactive, true: colors.buttonBg }}
           />
         </View>
+
+        <Text style={styles.subtitle}>Notificaciones push</Text>
+        <Pressable
+          onPress={handlePushTest}
+          disabled={testingPush}
+          style={[styles.pushButton, testingPush ? styles.pushButtonDisabled : null]}
+        >
+          {testingPush ? (
+            <>
+              <ActivityIndicator color={colors.buttonText} />
+              <Text style={styles.pushButtonText}>Probando...</Text>
+            </>
+          ) : (
+            <Text style={styles.pushButtonText}>Probar notificacion push</Text>
+          )}
+        </Pressable>
+
+        {pushDebug ? <Text style={styles.pushDebugText}>{pushDebug}</Text> : null}
       </View>
     </View>
   );
@@ -40,7 +122,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       borderWidth: 2,
       borderColor: colors.border,
       padding: 20,
-      gap: 8,
+      gap: 10,
     },
     title: {
       color: colors.textPrimary,
@@ -65,6 +147,29 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       color: colors.inputText,
       fontSize: 16,
       fontWeight: '600',
+    },
+    pushButton: {
+      backgroundColor: colors.buttonBg,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 8,
+    },
+    pushButtonDisabled: {
+      opacity: 0.8,
+    },
+    pushButtonText: {
+      color: colors.buttonText,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    pushDebugText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 18,
     },
   });
 }

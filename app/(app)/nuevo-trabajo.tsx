@@ -21,12 +21,14 @@ import {
   replaceCachedCatalogo,
 } from '@/lib/catalogos-cache';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/providers/auth-provider';
 import { useAppTheme } from '@/providers/theme-provider';
 
 type PickerField = 'recibido' | 'entrega' | null;
 
 export default function NuevoTrabajoScreen() {
   const { colors } = useAppTheme();
+  const { session } = useAuth();
   const styles = createStyles(colors);
 
   const [nombreTrabajo, setNombreTrabajo] = useState('');
@@ -189,6 +191,7 @@ export default function NuevoTrabajoScreen() {
       fecha_recibido: formatDateISO(recibido),
       fecha_entrega: entrega ? formatDateISO(entrega) : null,
       estado: 'creado',
+      owner_user_id: session?.user.id ?? null,
     });
 
     setLoadingSubmit(false);
@@ -197,6 +200,13 @@ export default function NuevoTrabajoScreen() {
       setMessage(`Error: ${error.message}`);
       return;
     }
+
+    notifyTrabajoCreadoPush({
+      trabajoNombre: cleanNombre,
+      fechaEntrega: entrega ? formatDateISO(entrega) : null,
+    }).catch((notifyError) => {
+      console.warn('No se pudo enviar push de trabajo creado.', notifyError);
+    });
 
     setNombreTrabajo('');
     setTipoTrabajoId(null);
@@ -453,4 +463,17 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       fontSize: 13,
     },
   });
+}
+
+async function notifyTrabajoCreadoPush(input: {
+  trabajoNombre: string;
+  fechaEntrega: string | null;
+}) {
+  const { error } = await supabase.functions.invoke('push-trabajo-created', {
+    body: input,
+  });
+
+  if (error) {
+    throw error;
+  }
 }

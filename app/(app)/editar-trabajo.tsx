@@ -26,6 +26,7 @@ import {
 import { upsertCachedTrabajo } from '@/lib/trabajos-cache';
 import { supabase } from '@/lib/supabase';
 import { buildTrabajoTerminadoWhatsAppMessage, openWhatsAppChat } from '@/lib/whatsapp';
+import { useAuth } from '@/providers/auth-provider';
 import { ThemeColors, useAppTheme } from '@/providers/theme-provider';
 import { useToast } from '@/providers/toast-provider';
 
@@ -34,6 +35,7 @@ type EstadoTrabajo = 'creado' | 'en_proceso' | 'terminado' | 'entregado';
 
 export default function EditarTrabajoScreen() {
   const { colors } = useAppTheme();
+  const { session } = useAuth();
   const { showToast } = useToast();
   const router = useRouter();
   const styles = createStyles(colors);
@@ -257,6 +259,7 @@ export default function EditarTrabajoScreen() {
         fecha_recibido: formatDateISO(recibido),
         fecha_entrega: entrega ? formatDateISO(entrega) : null,
         estado,
+        owner_user_id: session?.user.id ?? null,
       })
       .eq('id', trabajoId)
       .select('id')

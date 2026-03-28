@@ -1,6 +1,7 @@
 import { Session } from '@supabase/supabase-js';
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
+import { ensureNotificationSetup } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
 
 type AuthContextValue = {
@@ -50,6 +51,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       data.subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const userId = session?.user?.id ?? null;
+    ensureNotificationSetup(userId).catch((error) => {
+      console.warn('No se pudo inicializar push notifications para la sesion.', error);
+    });
+  }, [session?.user?.id]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

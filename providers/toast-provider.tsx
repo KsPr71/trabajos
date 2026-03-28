@@ -1,4 +1,5 @@
 import { ReactNode, createContext, useContext, useMemo, useRef, useState } from 'react';
+import Constants from 'expo-constants';
 import { StyleSheet, Text, View } from 'react-native';
 
 type ToastType = 'success' | 'error' | 'info';
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 36,
+    top: Math.max(12, (Constants.statusBarHeight ?? 0) + 6),
     alignItems: 'center',
     paddingHorizontal: 16,
   },
