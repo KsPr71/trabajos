@@ -5,7 +5,7 @@ import {
 } from "@react-navigation/drawer";
 import { Redirect } from "expo-router";
 import { Drawer } from "expo-router/drawer";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 
 import Developer from "@/components/ui/dev";
 import { useAuth } from "@/providers/auth-provider";
@@ -22,6 +22,7 @@ const drawerLabels: Record<string, string> = {
   "nuevo-trabajo": "Nuevo trabajo",
   "editar-trabajo": "Editar trabajo",
 };
+const imagenPersonalizada = require("@/assets/images/icon-negative.png");
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
@@ -46,6 +47,20 @@ export default function AppLayout() {
           {...props}
           contentContainerStyle={styles.drawerScrollContent}
         >
+          <View style={[styles.drawerHeader, { backgroundColor: "#053e8c" }]}>
+            <Image
+              source={imagenPersonalizada}
+              style={{
+                width: 60,
+                height: 60,
+                alignSelf: "center",
+                padding: 10,
+                marginLeft: 15,
+              }}
+            />
+
+            <Text style={styles.textoHeader}> Registro de trabajos</Text>
+          </View>
           <View
             style={[
               styles.welcomeCard,
@@ -169,9 +184,11 @@ const styles = StyleSheet.create({
     paddingTop: 28,
   },
   welcomeCard: {
-    marginTop: 30,
+    //marginTop: 30,
     marginBottom: 10,
     borderWidth: 2,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 14,
@@ -198,6 +215,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: 16,
   },
+
   drawerItem: {
     borderRadius: 16,
     marginVertical: 4,
@@ -209,5 +227,27 @@ const styles = StyleSheet.create({
   welcomeSubtitle: {
     marginTop: 4,
     fontSize: 13,
+  },
+  textoHeader: {
+    fontSize: 14,
+    color: "white",
+    textTransform: "uppercase",
+    alignSelf: "center",
+    marginLeft: 10,
+  },
+  drawerHeader: {
+    height: 80,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: "blue",
+    display: "flex",
+    flexDirection: "row",
+    alignContent: "flex-start",
+    textAlignVertical: "center",
+    verticalAlign: "middle",
   },
 });

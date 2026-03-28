@@ -1,4 +1,3 @@
-import Logo from "@/components/ui/Logo";
 import { Colors } from "@/constants/theme";
 import {
   Image,
@@ -24,7 +23,6 @@ const Developer = () => {
           },
         ]}
       >
-        <Logo size={50} style={styles.headerLogo} />
         <Image
           source={require("@/assets/images/novadev1.png")}
           style={styles.novaDevImage}
@@ -43,14 +41,16 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 16,
     borderWidth: 1,
-    padding: 5,
+    padding: 15,
     marginBottom: 16,
     alignItems: "center",
     alignSelf: "center",
+    alignContent: "center",
   },
   novaDevImage: {
     width: "50%",
     height: 30,
+    alignSelf: "center",
   },
   headerLogo: {
     marginRight: 8,
