@@ -3,6 +3,7 @@ import {
   DrawerContentScrollView,
   DrawerItemList,
 } from "@react-navigation/drawer";
+import Constants from "expo-constants";
 import { Redirect } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
@@ -23,6 +24,7 @@ const drawerLabels: Record<string, string> = {
   "editar-trabajo": "Editar trabajo",
 };
 const imagenPersonalizada = require("@/assets/images/icon-negative.png");
+const appVersion = Constants.expoConfig?.version ?? "1.0.0";
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
@@ -58,8 +60,10 @@ export default function AppLayout() {
                 marginLeft: 15,
               }}
             />
-
-            <Text style={styles.textoHeader}> Archivo de trabajos</Text>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.textoHeader}> Archivo de trabajos</Text>
+              <Text style={styles.versionText}>Version {appVersion}</Text>
+            </View>
           </View>
           <View
             style={[
@@ -232,8 +236,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "white",
     textTransform: "uppercase",
-    alignSelf: "center",
+  },
+  headerTextWrap: {
     marginLeft: 10,
+    alignSelf: "center",
+  },
+  versionText: {
+    marginTop: 4,
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 11,
+    fontWeight: "600",
+    marginLeft: 30,
   },
   drawerHeader: {
     height: 80,
