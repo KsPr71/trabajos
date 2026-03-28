@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { registerPushTokenForUser } from '@/lib/push-notifications';
+import { registerPushTokenForUser, runPushDiagnostics } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
 import { useToast } from '@/providers/toast-provider';
@@ -11,13 +11,52 @@ export default function AjustesScreen() {
   const { showToast } = useToast();
   const styles = createStyles(colors);
   const [testingPush, setTestingPush] = useState(false);
+  const [runningDiagnostics, setRunningDiagnostics] = useState(false);
   const [pushDebug, setPushDebug] = useState<string | null>(null);
+
+  const handlePushDiagnostics = async () => {
+    const {
+      data: { session: liveSession },
+      error: liveSessionError,
+    } = await supabase.auth.getSession();
+
+    if (liveSessionError) {
+      showToast(`No se pudo leer sesion actual: ${liveSessionError.message}`, 'error');
+      return;
+    }
+
+    const userId = liveSession?.user.id;
+    if (!userId) {
+      showToast('No hay sesion activa para diagnostico push.', 'error');
+      return;
+    }
+
+    setRunningDiagnostics(true);
+    setPushDebug(null);
+
+    try {
+      const diagnostics = await runPushDiagnostics(userId);
+      const summary = formatDiagnosticsSummary(diagnostics);
+      setPushDebug(summary);
+
+      if (diagnostics.token && diagnostics.upsertOk) {
+        showToast('Diagnostico completado: token generado y guardado.', 'success');
+      } else {
+        showToast('Diagnostico completado: revisa el detalle en pantalla.', 'info');
+      }
+    } catch (error) {
+      showToast(`Error en diagnostico push: ${String(error)}`, 'error');
+    } finally {
+      setRunningDiagnostics(false);
+    }
+  };
 
   const handlePushTest = async () => {
     const {
       data: { session: liveSession },
       error: liveSessionError,
     } = await supabase.auth.getSession();
+
     if (liveSessionError) {
       showToast(`No se pudo leer sesion actual: ${liveSessionError.message}`, 'error');
       return;
@@ -48,17 +87,29 @@ export default function AjustesScreen() {
         return;
       }
 
-      const { error: pushError } = await supabase.functions.invoke('push-trabajo-created', {
-        headers: liveSession?.access_token
-          ? {
-              Authorization: `Bearer ${liveSession.access_token}`,
-            }
-          : undefined,
-        body: {
-          trabajoNombre: 'Prueba push Archei',
-          fechaEntrega: null,
-        },
-      });
+      const tokenToShow = token ?? storedTokenRow?.expo_push_token ?? null;
+      if (!tokenToShow) {
+        setPushDebug(
+          'No se pudo registrar ExpoPushToken. Verifica permisos de notificaciones y que el build sea Development/APK.'
+        );
+        showToast('No se pudo obtener token push en este dispositivo.', 'error');
+        return;
+      }
+
+      const { data: pushResponse, error: pushError } = await supabase.functions.invoke(
+        'push-trabajo-created',
+        {
+          headers: liveSession?.access_token
+            ? {
+                Authorization: `Bearer ${liveSession.access_token}`,
+              }
+            : undefined,
+          body: {
+            trabajoNombre: 'Prueba push Archei',
+            fechaEntrega: null,
+          },
+        }
+      );
 
       if (pushError) {
         const errorDetail = await readFunctionsErrorDetail(pushError);
@@ -66,14 +117,17 @@ export default function AjustesScreen() {
         return;
       }
 
-      const tokenToShow = token ?? storedTokenRow?.expo_push_token ?? null;
+      const sentCount = getSentCount(pushResponse);
       setPushDebug(
-        tokenToShow
-          ? `Token activo: ${tokenToShow.slice(0, 24)}... | Ultimo registro: ${
-              storedTokenRow?.last_seen_at ?? 'sin fecha'
-            }`
-          : 'No se obtuvo token en este entorno (usa Development Build/APK, no Expo Go).'
+        `Token activo: ${tokenToShow.slice(0, 24)}... | Ultimo registro: ${
+          storedTokenRow?.last_seen_at ?? 'sin fecha'
+        } | Enviadas: ${sentCount}`
       );
+
+      if (sentCount <= 0) {
+        showToast('No se enviaron notificaciones: no hay tokens activos en backend.', 'info');
+        return;
+      }
 
       showToast('Push de prueba enviada. Revisa la notificacion en el dispositivo.', 'success');
     } catch (error) {
@@ -102,7 +156,7 @@ export default function AjustesScreen() {
         <Text style={styles.subtitle}>Notificaciones push</Text>
         <Pressable
           onPress={handlePushTest}
-          disabled={testingPush}
+          disabled={testingPush || runningDiagnostics}
           style={[styles.pushButton, testingPush ? styles.pushButtonDisabled : null]}
         >
           {testingPush ? (
@@ -115,10 +169,37 @@ export default function AjustesScreen() {
           )}
         </Pressable>
 
+        <Pressable
+          onPress={handlePushDiagnostics}
+          disabled={testingPush || runningDiagnostics}
+          style={[
+            styles.pushButtonSecondary,
+            testingPush || runningDiagnostics ? styles.pushButtonDisabled : null,
+          ]}
+        >
+          {runningDiagnostics ? (
+            <>
+              <ActivityIndicator color={colors.textPrimary} />
+              <Text style={styles.pushButtonSecondaryText}>Diagnosticando...</Text>
+            </>
+          ) : (
+            <Text style={styles.pushButtonSecondaryText}>Diagnostico push (temporal)</Text>
+          )}
+        </Pressable>
+
         {pushDebug ? <Text style={styles.pushDebugText}>{pushDebug}</Text> : null}
       </View>
     </View>
   );
+}
+
+function getSentCount(payload: unknown) {
+  if (!payload || typeof payload !== 'object') {
+    return 0;
+  }
+  const maybeSent = (payload as { sent?: unknown }).sent;
+  const parsed = Number(maybeSent);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
@@ -179,6 +260,23 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       fontSize: 15,
       fontWeight: '700',
     },
+    pushButtonSecondary: {
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBg,
+    },
+    pushButtonSecondaryText: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: '700',
+    },
     pushDebugText: {
       color: colors.textSecondary,
       fontSize: 12,
@@ -203,4 +301,30 @@ async function readFunctionsErrorDetail(error: unknown) {
   } catch {
     return `${basic} (status ${response.status})`;
   }
+}
+
+function formatDiagnosticsSummary(diagnostics: {
+  executionEnvironment: string;
+  platform: string;
+  isDevice: boolean;
+  permissionStatus: string;
+  canAskAgain: boolean;
+  projectId: string | null;
+  token: string | null;
+  tokenError: string | null;
+  upsertOk: boolean;
+  upsertError: string | null;
+}) {
+  return [
+    `Entorno: ${diagnostics.executionEnvironment || 'desconocido'}`,
+    `Plataforma: ${diagnostics.platform} | Fisico: ${diagnostics.isDevice ? 'si' : 'no'}`,
+    `Permiso: ${diagnostics.permissionStatus} | canAskAgain: ${
+      diagnostics.canAskAgain ? 'si' : 'no'
+    }`,
+    `projectId: ${diagnostics.projectId ?? 'null'}`,
+    `Token: ${
+      diagnostics.token ? `${diagnostics.token.slice(0, 24)}...` : `NO (${diagnostics.tokenError ?? 'sin detalle'})`
+    }`,
+    `Guardado DB: ${diagnostics.upsertOk ? 'ok' : `NO (${diagnostics.upsertError ?? 'sin detalle'})`}`,
+  ].join('\n');
 }
