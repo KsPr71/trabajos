@@ -35,6 +35,13 @@ Deno.serve(async (req) => {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
+      const message = userError?.message?.toLowerCase() ?? '';
+      if (message.includes('jwt')) {
+        return jsonResponse(
+          { error: 'JWT invalido o expirado. Cierra sesion y vuelve a iniciar sesion.' },
+          401
+        );
+      }
       return jsonResponse({ error: 'Usuario no autenticado.' }, 401);
     }
 

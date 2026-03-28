@@ -1,4 +1,3 @@
-import WindowsFolderCard from "@/components/ui/custom-card";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -48,7 +47,6 @@ export default function PerfilScreen() {
           )}
         </Pressable>
       </View>
-      <WindowsFolderCard />
     </View>
   );
 }

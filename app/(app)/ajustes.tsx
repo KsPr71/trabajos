@@ -3,20 +3,27 @@ import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 're
 
 import { registerPushTokenForUser } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/providers/auth-provider';
 import { useAppTheme } from '@/providers/theme-provider';
 import { useToast } from '@/providers/toast-provider';
 
 export default function AjustesScreen() {
   const { isDark, mode, toggleTheme, colors } = useAppTheme();
-  const { session } = useAuth();
   const { showToast } = useToast();
   const styles = createStyles(colors);
   const [testingPush, setTestingPush] = useState(false);
   const [pushDebug, setPushDebug] = useState<string | null>(null);
 
   const handlePushTest = async () => {
-    const userId = session?.user.id;
+    const {
+      data: { session: liveSession },
+      error: liveSessionError,
+    } = await supabase.auth.getSession();
+    if (liveSessionError) {
+      showToast(`No se pudo leer sesion actual: ${liveSessionError.message}`, 'error');
+      return;
+    }
+
+    const userId = liveSession?.user.id;
     if (!userId) {
       showToast('No hay sesion activa para probar push.', 'error');
       return;
@@ -42,6 +49,11 @@ export default function AjustesScreen() {
       }
 
       const { error: pushError } = await supabase.functions.invoke('push-trabajo-created', {
+        headers: liveSession?.access_token
+          ? {
+              Authorization: `Bearer ${liveSession.access_token}`,
+            }
+          : undefined,
         body: {
           trabajoNombre: 'Prueba push Archei',
           fechaEntrega: null,
@@ -49,7 +61,8 @@ export default function AjustesScreen() {
       });
 
       if (pushError) {
-        showToast(`No se pudo enviar push de prueba: ${pushError.message}`, 'error');
+        const errorDetail = await readFunctionsErrorDetail(pushError);
+        showToast(`No se pudo enviar push de prueba: ${errorDetail}`, 'error');
         return;
       }
 
@@ -172,4 +185,22 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       lineHeight: 18,
     },
   });
+}
+
+async function readFunctionsErrorDetail(error: unknown) {
+  const basic = error instanceof Error ? error.message : String(error);
+  const response = (error as { context?: Response } | null)?.context;
+  if (!response) {
+    return basic;
+  }
+
+  try {
+    const text = await response.text();
+    if (!text) {
+      return `${basic} (status ${response.status})`;
+    }
+    return `${basic} (status ${response.status}): ${text}`;
+  } catch {
+    return `${basic} (status ${response.status})`;
+  }
 }

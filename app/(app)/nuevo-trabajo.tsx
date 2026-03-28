@@ -469,8 +469,20 @@ async function notifyTrabajoCreadoPush(input: {
   trabajoNombre: string;
   fechaEntrega: string | null;
 }) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
   const { error } = await supabase.functions.invoke('push-trabajo-created', {
-    body: input,
+    headers: session?.access_token
+      ? {
+          Authorization: `Bearer ${session.access_token}`,
+        }
+      : undefined,
+    body: {
+      trabajoNombre: input.trabajoNombre,
+      fechaEntrega: input.fechaEntrega,
+    },
   });
 
   if (error) {
