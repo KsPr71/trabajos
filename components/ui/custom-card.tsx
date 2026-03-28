@@ -257,10 +257,9 @@ function createTrabajoStyles(colors: ThemeColors) {
       marginTop: 8,
       flexWrap: "wrap",
       justifyContent: "flex-end",
-      borderTopWidth: 1,
+      //borderTopWidth: 1,
       borderTopColor: colors.border,
       paddingVertical: 10,
-
       borderTopLeftRadius: 50,
     },
     entregaChip: {
