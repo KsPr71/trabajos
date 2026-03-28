@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "763730983567",
+    "project_id": "archei-815c5",
+    "storage_bucket": "archei-815c5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:763730983567:android:14de5093432482a6a80efa",
+        "android_client_info": {
+          "package_name": "com.archei.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCmJXc6xhXR6HgWWWbvyH4RJsa2hUVnFh4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
