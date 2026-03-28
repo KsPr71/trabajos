@@ -62,52 +62,65 @@ export function TrabajoCustomCard({
           </Text>
         </View>
 
-        <View style={styles.body}>
-          <Text style={styles.metaText}>
-            <Text style={styles.metaLabel}>Autor: </Text>
-            {autor}
-          </Text>
-          <Text style={styles.metaText}>
-            <Text style={styles.metaLabel}>Especialidad: </Text>
-            {especialidad}
-          </Text>
-          <Text style={styles.metaText}>
-            <Text style={styles.metaLabel}>Entrega: </Text>
-            {formatFechaEntrega(fechaEntrega)}
-          </Text>
-
-          <View style={styles.chipsRow}>
-            {showEntregaAlertChip ? (
-              <View style={styles.entregaChip}>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={14}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.entregaChipText}>Entrega</Text>
-              </View>
-            ) : null}
-
-            <View
-              style={[
-                styles.tipoChip,
-                { backgroundColor: tipoChipBg, borderColor: tipoChipBg },
-              ]}
-            >
-              <Text style={[styles.tipoChipText, { color: tipoChipTextColor }]}>
-                {tipoTrabajo}
+        <View
+          style={{
+            backgroundColor: `${titleBackground}30`,
+            padding: 1,
+            borderBottomLeftRadius: 10,
+            borderBottomRightRadius: 10,
+          }}
+        >
+          <View style={styles.body}>
+            <View style={{ marginTop: 10, marginBottom: 10 }}>
+              <Text style={styles.metaText}>
+                <Text style={styles.metaLabel}>Autor: </Text>
+                {autor}
+              </Text>
+              <Text style={styles.metaText}>
+                <Text style={styles.metaLabel}>Especialidad: </Text>
+                {especialidad}
+              </Text>
+              <Text style={styles.metaText}>
+                <Text style={styles.metaLabel}>Entrega: </Text>
+                {formatFechaEntrega(fechaEntrega)}
               </Text>
             </View>
 
-            <View
-              style={[
-                styles.statusChip,
-                { backgroundColor: chip.backgroundColor },
-              ]}
-            >
-              <Text style={[styles.chipText, { color: chip.textColor }]}>
-                {chip.label}
-              </Text>
+            <View style={[styles.chipsRow]}>
+              {showEntregaAlertChip ? (
+                <View style={styles.entregaChip}>
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.entregaChipText}>Entrega</Text>
+                </View>
+              ) : null}
+
+              <View
+                style={[
+                  styles.tipoChip,
+                  { backgroundColor: tipoChipBg, borderColor: tipoChipBg },
+                ]}
+              >
+                <Text
+                  style={[styles.tipoChipText, { color: tipoChipTextColor }]}
+                >
+                  {tipoTrabajo}
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.statusChip,
+                  { backgroundColor: chip.backgroundColor },
+                ]}
+              >
+                <Text style={[styles.chipText, { color: chip.textColor }]}>
+                  {chip.label}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -222,13 +235,19 @@ function createTrabajoStyles(colors: ThemeColors) {
       paddingTop: 18,
       borderTopLeftRadius: 10,
       borderTopRightRadius: 10,
-      borderBottomWidth: 2,
+
+      //borderBottomWidth: 2,
       borderBottomColor: colors.border,
-      marginBottom: 10,
+      //marginBottom: 10,
     },
     body: {
       paddingHorizontal: 16,
-      paddingBottom: 10,
+      //paddingBottom: 10,
+      borderTopLeftRadius: 30,
+      borderTopRightRadius: 30,
+      backgroundColor: "#ffffff",
+      borderBottomLeftRadius: 10,
+      borderBottomRightRadius: 10,
     },
     chipsRow: {
       flexDirection: "row",
@@ -238,6 +257,11 @@ function createTrabajoStyles(colors: ThemeColors) {
       marginTop: 8,
       flexWrap: "wrap",
       justifyContent: "flex-end",
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingVertical: 10,
+
+      borderTopLeftRadius: 50,
     },
     entregaChip: {
       flexDirection: "row",
@@ -281,6 +305,7 @@ function createTrabajoStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       fontSize: 14,
       lineHeight: 20,
+      marginTop: 5,
     },
     metaLabel: {
       color: colors.textPrimary,
