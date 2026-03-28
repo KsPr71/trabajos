@@ -234,7 +234,7 @@ function createTrabajoStyles(colors: ThemeColors) {
     tabText: {
       color: colors.textSecondary,
       fontSize: 11,
-      fontWeight: "700",
+      fontWeight: "800",
       letterSpacing: 0.2,
       textTransform: "uppercase",
       paddingRight: 30,
