@@ -19,6 +19,7 @@ type TrabajoCardProps = {
   estado: TrabajoCardEstado;
   onPress: () => void;
   accentBorder?: boolean;
+  entregaAlertType?: "esta_semana" | "vencido";
   showEntregaAlertChip?: boolean;
 };
 
@@ -32,6 +33,7 @@ export function TrabajoCard({
   estado,
   onPress,
   accentBorder = false,
+  entregaAlertType,
   showEntregaAlertChip = false,
 }: TrabajoCardProps) {
   const { colors } = useAppTheme();
@@ -44,6 +46,9 @@ export function TrabajoCard({
     ? lightenHexColor(tipoColor, 20)
     : colors.headerBg;
   const titleTextColor = getReadableTextColor(titleBackground);
+  const resolvedEntregaAlertType =
+    entregaAlertType ?? (showEntregaAlertChip ? "esta_semana" : null);
+  const entregaAlertChip = getEntregaAlertChip(resolvedEntregaAlertType);
 
   return (
     <Pressable
@@ -74,10 +79,26 @@ export function TrabajoCard({
           {formatFechaEntrega(fechaEntrega)}
         </Text>
         <View style={styles.chipsRow}>
-          {showEntregaAlertChip ? (
-            <View style={styles.entregaChip}>
-              <Ionicons name="alert-circle-outline" size={14} color="#FFFFFF" />
-              <Text style={styles.entregaChipText}>Entrega</Text>
+          {entregaAlertChip ? (
+            <View
+              style={[
+                styles.entregaChip,
+                { backgroundColor: entregaAlertChip.backgroundColor },
+              ]}
+            >
+              <Ionicons
+                name="alert-circle-outline"
+                size={14}
+                color={entregaAlertChip.textColor}
+              />
+              <Text
+                style={[
+                  styles.entregaChipText,
+                  { color: entregaAlertChip.textColor },
+                ]}
+              >
+                {entregaAlertChip.label}
+              </Text>
             </View>
           ) : null}
           <View
@@ -125,8 +146,8 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
   if (estado === "en_proceso") {
     return {
       label: "En proceso",
-      backgroundColor: "#F59E0B",
-      textColor: "#1B1400",
+      backgroundColor: "#0891B2",
+      textColor: "#FFFFFF",
     };
   }
   return {
@@ -134,6 +155,26 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
     backgroundColor: colors.buttonBg,
     textColor: colors.buttonText,
   };
+}
+
+function getEntregaAlertChip(
+  alertType: "esta_semana" | "vencido" | null,
+) {
+  if (alertType === "vencido") {
+    return {
+      label: "Vencido",
+      backgroundColor: "#DC2626",
+      textColor: "#FFFFFF",
+    };
+  }
+  if (alertType === "esta_semana") {
+    return {
+      label: "Esta semana",
+      backgroundColor: "#F59E0B",
+      textColor: "#1B1400",
+    };
+  }
+  return null;
 }
 
 function formatFechaEntrega(fechaEntrega: string | null) {
@@ -243,7 +284,6 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: "#DC2626",
     },
     entregaChipText: {
-      color: "#FFFFFF",
       fontSize: 12,
       fontWeight: "700",
     },

@@ -15,6 +15,7 @@ type TrabajoCustomCardProps = {
   estado: TrabajoCardEstado;
   onPress: () => void;
   accentBorder?: boolean;
+  entregaAlertType?: "esta_semana" | "vencido";
   showEntregaAlertChip?: boolean;
 };
 
@@ -28,6 +29,7 @@ export function TrabajoCustomCard({
   estado,
   onPress,
   accentBorder = false,
+  entregaAlertType,
   showEntregaAlertChip = false,
 }: TrabajoCustomCardProps) {
   const { colors } = useAppTheme();
@@ -40,6 +42,9 @@ export function TrabajoCustomCard({
     ? lightenHexColor(tipoColor, 20)
     : colors.headerBg;
   const titleTextColor = getReadableTextColor(titleBackground);
+  const resolvedEntregaAlertType =
+    entregaAlertType ?? (showEntregaAlertChip ? "esta_semana" : null);
+  const entregaAlertChip = getEntregaAlertChip(resolvedEntregaAlertType);
 
   return (
     <Pressable
@@ -87,14 +92,26 @@ export function TrabajoCustomCard({
             </View>
 
             <View style={[styles.chipsRow]}>
-              {showEntregaAlertChip ? (
-                <View style={styles.entregaChip}>
+              {entregaAlertChip ? (
+                <View
+                  style={[
+                    styles.entregaChip,
+                    { backgroundColor: entregaAlertChip.backgroundColor },
+                  ]}
+                >
                   <Ionicons
                     name="alert-circle-outline"
                     size={14}
-                    color="#FFFFFF"
+                    color={entregaAlertChip.textColor}
                   />
-                  <Text style={styles.entregaChipText}>Entrega</Text>
+                  <Text
+                    style={[
+                      styles.entregaChipText,
+                      { color: entregaAlertChip.textColor },
+                    ]}
+                  >
+                    {entregaAlertChip.label}
+                  </Text>
                 </View>
               ) : null}
 
@@ -150,9 +167,9 @@ const demoStyles = StyleSheet.create({
   tab: {
     backgroundColor: "#ffffff",
     alignSelf: "flex-start",
-    marginLeft: 10,
+    marginLeft: 0,
     marginBottom: -2,
-    paddingHorizontal: 15,
+    //paddingHorizontal: 15,
     paddingVertical: 5,
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
@@ -166,6 +183,7 @@ const demoStyles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
     color: "#333",
+    paddingHorizontal: 10,
   },
   cardBody: {
     backgroundColor: "#ffffff",
@@ -199,7 +217,7 @@ function createTrabajoStyles(colors: ThemeColors) {
     tab: {
       position: "relative",
       alignSelf: "flex-start",
-      marginLeft: 14,
+      marginLeft: 0,
       marginBottom: -2.5,
       paddingHorizontal: 12,
       paddingVertical: 5,
@@ -219,10 +237,13 @@ function createTrabajoStyles(colors: ThemeColors) {
       fontWeight: "700",
       letterSpacing: 0.2,
       textTransform: "uppercase",
+      paddingRight: 30,
     },
     cardBody: {
       backgroundColor: colors.card,
       borderRadius: 16,
+      borderTopLeftRadius: 0,
+      borderBottomLeftRadius: 16,
       borderWidth: 2,
       borderColor: colors.border,
       elevation: 4,
@@ -272,7 +293,6 @@ function createTrabajoStyles(colors: ThemeColors) {
       backgroundColor: "#DC2626",
     },
     entregaChipText: {
-      color: "#FFFFFF",
       fontSize: 12,
       fontWeight: "700",
     },
@@ -331,8 +351,8 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
   if (estado === "en_proceso") {
     return {
       label: "En proceso",
-      backgroundColor: "#F59E0B",
-      textColor: "#1B1400",
+      backgroundColor: "#0891B2",
+      textColor: "#FFFFFF",
     };
   }
   return {
@@ -340,6 +360,24 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
     backgroundColor: colors.buttonBg,
     textColor: colors.buttonText,
   };
+}
+
+function getEntregaAlertChip(alertType: "esta_semana" | "vencido" | null) {
+  if (alertType === "vencido") {
+    return {
+      label: "Vencido",
+      backgroundColor: "#DC2626",
+      textColor: "#FFFFFF",
+    };
+  }
+  if (alertType === "esta_semana") {
+    return {
+      label: "Esta semana",
+      backgroundColor: "#F59E0B",
+      textColor: "#1B1400",
+    };
+  }
+  return null;
 }
 
 function formatFechaEntrega(fechaEntrega: string | null) {

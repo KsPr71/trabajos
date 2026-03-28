@@ -24,6 +24,7 @@ import {
 import { ThemeColors, useAppTheme } from "@/providers/theme-provider";
 
 type EstadoTrabajo = "creado" | "en_proceso" | "terminado" | "entregado";
+type EntregaAlertType = "none" | "esta_semana" | "vencido";
 
 type TrabajoItem = {
   id: number;
@@ -70,8 +71,17 @@ export default function TrabajosScreen() {
     );
   }, [searchText, trabajos]);
 
-  const hasTrabajosPorTerminarEstaSemana = useMemo(
-    () => trabajos.some((item) => isTrabajoPorTerminarEstaSemana(item)),
+  const hasTrabajosVencidos = useMemo(
+    () =>
+      trabajos.some((item) => getTrabajoEntregaAlertType(item) === "vencido"),
+    [trabajos],
+  );
+
+  const hasTrabajosPorEntregarEstaSemana = useMemo(
+    () =>
+      trabajos.some(
+        (item) => getTrabajoEntregaAlertType(item) === "esta_semana",
+      ),
     [trabajos],
   );
 
@@ -152,11 +162,20 @@ export default function TrabajosScreen() {
 
   return (
     <View style={styles.container}>
-      {!loading && !errorMessage && hasTrabajosPorTerminarEstaSemana ? (
-        <View style={styles.alertBanner}>
+      {!loading && !errorMessage && hasTrabajosVencidos ? (
+        <View style={[styles.alertBanner, styles.alertBannerDanger]}>
           <Ionicons name="alert-circle-outline" size={18} color="#FFFFFF" />
-          <Text style={styles.alertBannerText}>
-            Hay trabajos por terminar esta semana
+          <Text style={[styles.alertBannerText, styles.alertBannerTextDanger]}>
+            Hay trabajos pasados de fecha de entrega
+          </Text>
+        </View>
+      ) : null}
+
+      {!loading && !errorMessage && hasTrabajosPorEntregarEstaSemana ? (
+        <View style={[styles.alertBanner, styles.alertBannerWarning]}>
+          <Ionicons name="alert-circle-outline" size={18} color="#1B1400" />
+          <Text style={[styles.alertBannerText, styles.alertBannerTextWarning]}>
+            Hay trabajos por entregar esta semana
           </Text>
         </View>
       ) : null}
@@ -205,6 +224,7 @@ export default function TrabajosScreen() {
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => {
+              const entregaAlertType = getTrabajoEntregaAlertType(item);
               return (
                 <TrabajoCustomCard
                   nombreTrabajo={item.nombreTrabajo}
@@ -215,7 +235,9 @@ export default function TrabajosScreen() {
                   fechaEntrega={item.fechaEntrega}
                   estado={item.estado}
                   accentBorder
-                  showEntregaAlertChip={isTrabajoPorTerminarEstaSemana(item)}
+                  entregaAlertType={
+                    entregaAlertType === "none" ? undefined : entregaAlertType
+                  }
                   onPress={() =>
                     router.push({
                       pathname: "/(app)/editar-trabajo",
@@ -358,8 +380,6 @@ function createStyles(colors: ThemeColors) {
     alertBanner: {
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: "#991B1B",
-      backgroundColor: "#DC2626",
       paddingHorizontal: 12,
       paddingVertical: 10,
       marginBottom: 10,
@@ -367,11 +387,24 @@ function createStyles(colors: ThemeColors) {
       alignItems: "center",
       gap: 8,
     },
+    alertBannerDanger: {
+      borderColor: "#991B1B",
+      backgroundColor: "#DC2626",
+    },
+    alertBannerWarning: {
+      borderColor: "#B45309",
+      backgroundColor: "#F59E0B",
+    },
     alertBannerText: {
-      color: "#FFFFFF",
       fontSize: 13,
       fontWeight: "700",
       flex: 1,
+    },
+    alertBannerTextDanger: {
+      color: "#FFFFFF",
+    },
+    alertBannerTextWarning: {
+      color: "#1B1400",
     },
     stateCard: {
       backgroundColor: colors.card,
@@ -429,24 +462,30 @@ function formatDateTime(isoDate: string) {
   return `${day}/${month}/${year} ${hour}:${minute}`;
 }
 
-function isTrabajoPorTerminarEstaSemana(item: TrabajoItem) {
-  if (item.estado === "terminado" || item.estado === "entregado") {
-    return false;
+function getTrabajoEntregaAlertType(item: TrabajoItem): EntregaAlertType {
+  if (item.estado === "entregado") {
+    return "none";
   }
   if (!item.fechaEntrega) {
-    return false;
+    return "none";
   }
 
   const fechaEntrega = parseDateISO(item.fechaEntrega);
   if (!fechaEntrega) {
-    return false;
+    return "none";
   }
 
   const hoy = startOfDay(new Date());
   const diffMs = fechaEntrega.getTime() - hoy.getTime();
   const diffDays = Math.ceil(diffMs / 86400000);
 
-  return diffDays <= 7 && diffDays >= 0;
+  if (diffDays < 0) {
+    return "vencido";
+  }
+  if (diffDays <= 7) {
+    return "esta_semana";
+  }
+  return "none";
 }
 
 function parseDateISO(value: string) {
