@@ -5,6 +5,8 @@ export type CatalogoKey = 'clientes' | 'tipo_trabajo' | 'especialidad' | 'instit
 export type CachedCatalogoItem = {
   id: number;
   nombre: string;
+  precio?: number | null;
+  color?: string | null;
   updatedAt: string;
 };
 
@@ -58,9 +60,12 @@ async function ensureSchema() {
       `create table if not exists tipo_trabajo_cache (
         id integer primary key not null,
         nombre text not null,
+        precio real,
+        color text,
         updated_at text not null
       )`
     );
+    await ensureTipoTrabajoColumns(db);
 
     await db.runAsync(
       `create table if not exists especialidad_cache (
@@ -103,14 +108,43 @@ async function ensureClientesTelefonoColumn(db: SQLite.SQLiteDatabase) {
   }
 }
 
+async function ensureTipoTrabajoColumns(db: SQLite.SQLiteDatabase) {
+  const columns = await db.getAllAsync<{ name: string }>('pragma table_info(tipo_trabajo_cache)');
+  const hasPrecio = columns.some((column) => column.name === 'precio');
+  const hasColor = columns.some((column) => column.name === 'color');
+
+  if (!hasPrecio) {
+    await db.runAsync('alter table tipo_trabajo_cache add column precio real');
+  }
+  if (!hasColor) {
+    await db.runAsync('alter table tipo_trabajo_cache add column color text');
+  }
+}
+
 export async function getCachedCatalogo(catalogo: CatalogoKey): Promise<CachedCatalogoItem[]> {
   await ensureSchema();
   const db = await dbPromise;
   const tableName = TABLE_BY_KEY[catalogo];
 
-  const rows = await db.getAllAsync<{ id: number; nombre: string; updated_at: string }>(
-    `select id, nombre, updated_at from ${tableName} order by nombre asc, id asc`
-  );
+  if (catalogo === 'tipo_trabajo') {
+    const rows = await db.getAllAsync<{
+      id: number;
+      nombre: string;
+      precio: number | null;
+      color: string | null;
+      updated_at: string;
+    }>(`select id, nombre, precio, color, updated_at from ${tableName} order by nombre asc, id asc`);
+
+    return rows.map((row) => ({
+      id: row.id,
+      nombre: row.nombre,
+      precio: Number.isFinite(Number(row.precio)) ? Number(row.precio) : null,
+      color: typeof row.color === 'string' ? row.color : null,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  const rows = await db.getAllAsync<{ id: number; nombre: string; updated_at: string }>(`select id, nombre, updated_at from ${tableName} order by nombre asc, id asc`);
 
   return rows.map((row) => ({
     id: row.id,
@@ -133,10 +167,23 @@ export async function replaceCachedCatalogo(
       await db.runAsync(`delete from ${tableName}`);
 
       for (const item of items) {
-        await db.runAsync(
-          `insert into ${tableName} (id, nombre, updated_at) values (?, ?, ?)`,
-          [item.id, item.nombre, item.updatedAt || now]
-        );
+        if (catalogo === 'tipo_trabajo') {
+          await db.runAsync(
+            `insert into ${tableName} (id, nombre, precio, color, updated_at) values (?, ?, ?, ?, ?)`,
+            [
+              item.id,
+              item.nombre,
+              item.precio ?? null,
+              item.color ?? null,
+              item.updatedAt || now,
+            ]
+          );
+        } else {
+          await db.runAsync(
+            `insert into ${tableName} (id, nombre, updated_at) values (?, ?, ?)`,
+            [item.id, item.nombre, item.updatedAt || now]
+          );
+        }
       }
 
       await db.runAsync(
@@ -234,14 +281,33 @@ export async function upsertCachedCatalogo(
     const now = new Date().toISOString();
 
     await db.withTransactionAsync(async () => {
-      await db.runAsync(
-        `insert into ${tableName} (id, nombre, updated_at)
-         values (?, ?, ?)
-         on conflict(id) do update set
-           nombre = excluded.nombre,
-           updated_at = excluded.updated_at`,
-        [item.id, item.nombre, item.updatedAt || now]
-      );
+      if (catalogo === 'tipo_trabajo') {
+        await db.runAsync(
+          `insert into ${tableName} (id, nombre, precio, color, updated_at)
+           values (?, ?, ?, ?, ?)
+           on conflict(id) do update set
+             nombre = excluded.nombre,
+             precio = excluded.precio,
+             color = excluded.color,
+             updated_at = excluded.updated_at`,
+          [
+            item.id,
+            item.nombre,
+            item.precio ?? null,
+            item.color ?? null,
+            item.updatedAt || now,
+          ]
+        );
+      } else {
+        await db.runAsync(
+          `insert into ${tableName} (id, nombre, updated_at)
+           values (?, ?, ?)
+           on conflict(id) do update set
+             nombre = excluded.nombre,
+             updated_at = excluded.updated_at`,
+          [item.id, item.nombre, item.updatedAt || now]
+        );
+      }
 
       await db.runAsync(
         `insert into cache_meta (key, value) values (?, ?)
@@ -271,10 +337,18 @@ export function mapSupabaseCatalogRows(rows: unknown): CachedCatalogoItem[] {
   const now = new Date().toISOString();
   return rows
     .map((row) => {
-      const typedRow = row as { id?: number | string; nombre?: string; created_at?: string };
+      const typedRow = row as {
+        id?: number | string;
+        nombre?: string;
+        precio?: number | string | null;
+        color?: string | null;
+        created_at?: string;
+      };
       return {
         id: Number(typedRow.id),
         nombre: String(typedRow.nombre ?? ''),
+        precio: parsePrecioValue(typedRow.precio),
+        color: parseColorValue(typedRow.color),
         updatedAt: typedRow.created_at ? String(typedRow.created_at) : now,
       };
     })
@@ -282,7 +356,15 @@ export function mapSupabaseCatalogRows(rows: unknown): CachedCatalogoItem[] {
 }
 
 export function mapSupabaseCatalogRow(row: unknown): CachedCatalogoItem | null {
-  const typedRow = row as { id?: number | string; nombre?: string; created_at?: string } | null;
+  const typedRow = row as
+    | {
+        id?: number | string;
+        nombre?: string;
+        precio?: number | string | null;
+        color?: string | null;
+        created_at?: string;
+      }
+    | null;
   if (!typedRow) {
     return null;
   }
@@ -290,6 +372,8 @@ export function mapSupabaseCatalogRow(row: unknown): CachedCatalogoItem | null {
   const parsed = {
     id: Number(typedRow.id),
     nombre: String(typedRow.nombre ?? ''),
+    precio: parsePrecioValue(typedRow.precio),
+    color: parseColorValue(typedRow.color),
     updatedAt: typedRow.created_at ? String(typedRow.created_at) : new Date().toISOString(),
   };
 
@@ -298,6 +382,22 @@ export function mapSupabaseCatalogRow(row: unknown): CachedCatalogoItem | null {
   }
 
   return parsed;
+}
+
+function parsePrecioValue(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseColorValue(value: unknown) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 export function mapSupabaseClienteRows(rows: unknown): CachedClienteItem[] {

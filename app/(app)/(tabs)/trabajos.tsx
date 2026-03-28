@@ -166,16 +166,16 @@ export default function TrabajosScreen() {
         <View style={[styles.alertBanner, styles.alertBannerDanger]}>
           <Ionicons name="alert-circle-outline" size={18} color="#FFFFFF" />
           <Text style={[styles.alertBannerText, styles.alertBannerTextDanger]}>
-            Hay trabajos pasados de fecha de entrega
+            Hay trabajos pasado de fecha de entrega.
           </Text>
         </View>
       ) : null}
 
       {!loading && !errorMessage && hasTrabajosPorEntregarEstaSemana ? (
         <View style={[styles.alertBanner, styles.alertBannerWarning]}>
-          <Ionicons name="alert-circle-outline" size={18} color="#1B1400" />
+          <Ionicons name="alert-circle-outline" size={18} color="#FFFFFF" />
           <Text style={[styles.alertBannerText, styles.alertBannerTextWarning]}>
-            Hay trabajos por entregar esta semana
+            Hay trabajos por terminar esta semana
           </Text>
         </View>
       ) : null}
@@ -392,8 +392,8 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: "#DC2626",
     },
     alertBannerWarning: {
-      borderColor: "#B45309",
-      backgroundColor: "#F59E0B",
+      borderColor: "#92400E",
+      backgroundColor: "#D97706",
     },
     alertBannerText: {
       fontSize: 13,
@@ -404,7 +404,7 @@ function createStyles(colors: ThemeColors) {
       color: "#FFFFFF",
     },
     alertBannerTextWarning: {
-      color: "#1B1400",
+      color: "#FFFFFF",
     },
     stateCard: {
       backgroundColor: colors.card,
@@ -463,7 +463,7 @@ function formatDateTime(isoDate: string) {
 }
 
 function getTrabajoEntregaAlertType(item: TrabajoItem): EntregaAlertType {
-  if (item.estado === "entregado") {
+  if (item.estado === "terminado" || item.estado === "entregado") {
     return "none";
   }
   if (!item.fechaEntrega) {

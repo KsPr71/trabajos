@@ -10,7 +10,13 @@ import {
   View,
 } from 'react-native';
 
-import { mapSupabaseCatalogRow, upsertCachedCatalogo } from '@/lib/catalogos-cache';
+import {
+  getCachedCatalogo,
+  mapSupabaseCatalogRow,
+  mapSupabaseCatalogRows,
+  replaceCachedCatalogo,
+  upsertCachedCatalogo,
+} from '@/lib/catalogos-cache';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
 
@@ -35,13 +41,38 @@ export default function TipoTrabajoScreen() {
 
   const loadTiposTrabajo = useCallback(async () => {
     setLoadingLista(true);
+    let hasCache = false;
+
+    try {
+      const cachedRows = await getCachedCatalogo('tipo_trabajo');
+      const cachedMapped = cachedRows
+        .map((row) => ({
+          id: Number(row.id),
+          nombre: String(row.nombre ?? ''),
+          precio: Number.isFinite(Number(row.precio)) ? Number(row.precio) : 0,
+          color: parseTipoColor(row.color),
+        }))
+        .filter((item) => Number.isFinite(item.id) && item.nombre.length > 0);
+
+      if (cachedMapped.length > 0) {
+        hasCache = true;
+        setTiposRegistrados(cachedMapped);
+        setLoadingLista(false);
+      }
+    } catch (cacheError) {
+      console.warn('No se pudo leer cache local de tipo de trabajo.', cacheError);
+    }
+
     const { data, error } = await supabase
       .from('tipo_trabajo')
-      .select('id,nombre,precio,color')
+      .select('id,nombre,precio,color,created_at')
       .order('nombre', { ascending: true });
 
     if (error) {
       console.warn('No se pudo cargar la lista de tipos de trabajo.', error);
+      if (!hasCache) {
+        setMessage('No se pudo sincronizar tipos de trabajo y no hay cache local disponible.');
+      }
       setLoadingLista(false);
       return;
     }
@@ -57,6 +88,12 @@ export default function TipoTrabajoScreen() {
 
     setTiposRegistrados(mapped);
     setLoadingLista(false);
+
+    try {
+      await replaceCachedCatalogo('tipo_trabajo', mapSupabaseCatalogRows(data));
+    } catch (cacheError) {
+      console.warn('No se pudo reemplazar cache local de tipo de trabajo.', cacheError);
+    }
   }, []);
 
   useFocusEffect(
@@ -97,7 +134,7 @@ export default function TipoTrabajoScreen() {
     const { data, error } = await supabase
       .from('tipo_trabajo')
       .insert({ nombre: cleanNombre, precio: parsedPrecio, color: normalizedColor })
-      .select('id,nombre,created_at,color')
+      .select('id,nombre,precio,color,created_at')
       .maybeSingle();
 
     setLoading(false);
@@ -166,7 +203,7 @@ export default function TipoTrabajoScreen() {
       .from('tipo_trabajo')
       .update({ nombre: cleanNombre, precio: parsedPrecio, color: normalizedColor })
       .eq('id', editingId)
-      .select('id,nombre,created_at,color')
+      .select('id,nombre,precio,color,created_at')
       .maybeSingle();
 
     setSavingEdit(false);

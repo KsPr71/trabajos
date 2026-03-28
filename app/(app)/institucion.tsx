@@ -10,7 +10,13 @@ import {
   View,
 } from 'react-native';
 
-import { mapSupabaseCatalogRow, upsertCachedCatalogo } from '@/lib/catalogos-cache';
+import {
+  getCachedCatalogo,
+  mapSupabaseCatalogRow,
+  mapSupabaseCatalogRows,
+  replaceCachedCatalogo,
+  upsertCachedCatalogo,
+} from '@/lib/catalogos-cache';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
 
@@ -31,13 +37,36 @@ export default function InstitucionScreen() {
 
   const loadInstituciones = useCallback(async () => {
     setLoadingLista(true);
+    let hasCache = false;
+
+    try {
+      const cachedRows = await getCachedCatalogo('institucion');
+      const cachedMapped = cachedRows
+        .map((row) => ({
+          id: Number(row.id),
+          nombre: String(row.nombre ?? ''),
+        }))
+        .filter((item) => Number.isFinite(item.id) && item.nombre.length > 0);
+
+      if (cachedMapped.length > 0) {
+        hasCache = true;
+        setInstitucionesRegistradas(cachedMapped);
+        setLoadingLista(false);
+      }
+    } catch (cacheError) {
+      console.warn('No se pudo leer cache local de instituciones.', cacheError);
+    }
+
     const { data, error } = await supabase
       .from('institucion')
-      .select('id,nombre')
+      .select('id,nombre,created_at')
       .order('nombre', { ascending: true });
 
     if (error) {
       console.warn('No se pudo cargar la lista de instituciones.', error);
+      if (!hasCache) {
+        setMessage('No se pudo sincronizar instituciones y no hay cache local disponible.');
+      }
       setLoadingLista(false);
       return;
     }
@@ -51,6 +80,12 @@ export default function InstitucionScreen() {
 
     setInstitucionesRegistradas(mapped);
     setLoadingLista(false);
+
+    try {
+      await replaceCachedCatalogo('institucion', mapSupabaseCatalogRows(data));
+    } catch (cacheError) {
+      console.warn('No se pudo reemplazar cache local de instituciones.', cacheError);
+    }
   }, []);
 
   useFocusEffect(

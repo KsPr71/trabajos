@@ -41,7 +41,7 @@ export function TrabajoCustomCard({
   const titleBackground = tipoColor
     ? lightenHexColor(tipoColor, 20)
     : colors.headerBg;
-  const titleTextColor = getReadableTextColor(titleBackground);
+  const titleTextColor = "#000000";
   const resolvedEntregaAlertType =
     entregaAlertType ?? (showEntregaAlertChip ? "esta_semana" : null);
   const entregaAlertChip = getEntregaAlertChip(resolvedEntregaAlertType);
@@ -88,6 +88,10 @@ export function TrabajoCustomCard({
               <Text style={styles.metaText}>
                 <Text style={styles.metaLabel}>Entrega: </Text>
                 {formatFechaEntrega(fechaEntrega)}
+              </Text>
+              <Text style={styles.metaText}>
+                <Text style={styles.metaLabel}>Plazo: </Text>
+                {getDiasRestantesTexto(fechaEntrega, estado)}
               </Text>
             </View>
 
@@ -222,7 +226,7 @@ function createTrabajoStyles(colors: ThemeColors) {
       paddingHorizontal: 12,
       paddingVertical: 5,
       borderTopLeftRadius: 8,
-      borderTopRightRadius: 8,
+      borderTopRightRadius: 30,
       borderTopWidth: 2,
       borderLeftWidth: 2,
       borderRightWidth: 2,
@@ -237,7 +241,8 @@ function createTrabajoStyles(colors: ThemeColors) {
       fontWeight: "800",
       letterSpacing: 0.2,
       textTransform: "uppercase",
-      paddingRight: 30,
+      paddingRight: 50,
+      paddingLeft: 10,
     },
     cardBody: {
       backgroundColor: colors.card,
@@ -365,16 +370,16 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
 function getEntregaAlertChip(alertType: "esta_semana" | "vencido" | null) {
   if (alertType === "vencido") {
     return {
-      label: "Vencido",
+      label: "Terminar",
       backgroundColor: "#DC2626",
       textColor: "#FFFFFF",
     };
   }
   if (alertType === "esta_semana") {
     return {
-      label: "Esta semana",
-      backgroundColor: "#F59E0B",
-      textColor: "#1B1400",
+      label: "Terminar",
+      backgroundColor: "#D97706",
+      textColor: "#FFFFFF",
     };
   }
   return null;
@@ -389,6 +394,51 @@ function formatFechaEntrega(fechaEntrega: string | null) {
     return fechaEntrega;
   }
   return `${day}/${month}/${year}`;
+}
+
+function getDiasRestantesTexto(
+  fechaEntrega: string | null,
+  estado: TrabajoCardEstado,
+) {
+  if (!fechaEntrega) {
+    return "Sin fecha";
+  }
+
+  const parsedDate = parseISODate(fechaEntrega);
+  if (!parsedDate) {
+    return "Sin fecha";
+  }
+
+  const hoy = startOfDay(new Date());
+  const entrega = startOfDay(parsedDate);
+  const diffMs = entrega.getTime() - hoy.getTime();
+  const diffDays = Math.ceil(diffMs / 86400000);
+
+  if ((estado === "terminado" || estado === "entregado") && diffDays >= 0) {
+    return "Terminado en tiempo";
+  }
+  if (diffDays < 0) {
+    return "Pasado de fecha";
+  }
+  if (diffDays === 0) {
+    return "Entrega hoy";
+  }
+  if (diffDays === 1) {
+    return "1 dia restante";
+  }
+  return `${diffDays} dias restantes`;
+}
+
+function parseISODate(value: string) {
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function normalizeHexColor(value: string | null | undefined) {

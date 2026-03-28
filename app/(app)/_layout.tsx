@@ -59,7 +59,7 @@ export default function AppLayout() {
               }}
             />
 
-            <Text style={styles.textoHeader}> Registro de trabajos</Text>
+            <Text style={styles.textoHeader}> Archivo de trabajos</Text>
           </View>
           <View
             style={[

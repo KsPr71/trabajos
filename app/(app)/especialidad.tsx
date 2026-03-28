@@ -10,7 +10,13 @@ import {
   View,
 } from 'react-native';
 
-import { mapSupabaseCatalogRow, upsertCachedCatalogo } from '@/lib/catalogos-cache';
+import {
+  getCachedCatalogo,
+  mapSupabaseCatalogRow,
+  mapSupabaseCatalogRows,
+  replaceCachedCatalogo,
+  upsertCachedCatalogo,
+} from '@/lib/catalogos-cache';
 import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
 
@@ -31,13 +37,36 @@ export default function EspecialidadScreen() {
 
   const loadEspecialidades = useCallback(async () => {
     setLoadingLista(true);
+    let hasCache = false;
+
+    try {
+      const cachedRows = await getCachedCatalogo('especialidad');
+      const cachedMapped = cachedRows
+        .map((row) => ({
+          id: Number(row.id),
+          nombre: String(row.nombre ?? ''),
+        }))
+        .filter((item) => Number.isFinite(item.id) && item.nombre.length > 0);
+
+      if (cachedMapped.length > 0) {
+        hasCache = true;
+        setEspecialidadesRegistradas(cachedMapped);
+        setLoadingLista(false);
+      }
+    } catch (cacheError) {
+      console.warn('No se pudo leer cache local de especialidades.', cacheError);
+    }
+
     const { data, error } = await supabase
       .from('especialidad')
-      .select('id,nombre')
+      .select('id,nombre,created_at')
       .order('nombre', { ascending: true });
 
     if (error) {
       console.warn('No se pudo cargar la lista de especialidades.', error);
+      if (!hasCache) {
+        setMessage('No se pudo sincronizar especialidades y no hay cache local disponible.');
+      }
       setLoadingLista(false);
       return;
     }
@@ -51,6 +80,12 @@ export default function EspecialidadScreen() {
 
     setEspecialidadesRegistradas(mapped);
     setLoadingLista(false);
+
+    try {
+      await replaceCachedCatalogo('especialidad', mapSupabaseCatalogRows(data));
+    } catch (cacheError) {
+      console.warn('No se pudo reemplazar cache local de especialidades.', cacheError);
+    }
   }, []);
 
   useFocusEffect(

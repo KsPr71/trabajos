@@ -56,10 +56,7 @@ export function TrabajoCard({
       style={[styles.card, accentBorder ? styles.cardWithAccent : null]}
     >
       <View
-        style={[
-          styles.titleContainer,
-          { backgroundColor: titleBackground + 30 },
-        ]}
+        style={[styles.titleContainer, { backgroundColor: titleBackground }]}
       >
         <Text style={[styles.cardTitle, { color: titleTextColor }]}>
           {nombreTrabajo}
@@ -157,9 +154,7 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
   };
 }
 
-function getEntregaAlertChip(
-  alertType: "esta_semana" | "vencido" | null,
-) {
+function getEntregaAlertChip(alertType: "esta_semana" | "vencido" | null) {
   if (alertType === "vencido") {
     return {
       label: "Vencido",
