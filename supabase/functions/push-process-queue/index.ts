@@ -210,6 +210,7 @@ function buildMessageContent(row: QueueRow): MessageContent | null {
   const payload = row.payload ?? {};
   const trabajoNombre = getString(payload.trabajoNombre) ?? 'Trabajo';
   const fechaEntrega = getString(payload.fechaEntrega);
+  const trabajoId = row.trabajo_id ?? getNumber(payload.trabajoId);
 
   if (row.event_type === 'trabajo_creado') {
     return {
@@ -219,7 +220,7 @@ function buildMessageContent(row: QueueRow): MessageContent | null {
         : `Se creo "${trabajoNombre}".`,
       data: {
         type: 'trabajo_creado',
-        trabajoId: row.trabajo_id,
+        trabajoId,
         trabajoNombre,
         fechaEntrega,
       },
@@ -232,7 +233,7 @@ function buildMessageContent(row: QueueRow): MessageContent | null {
       body: `"${trabajoNombre}" esta terminado y listo para gestionar entrega.`,
       data: {
         type: 'trabajo_terminado',
-        trabajoId: row.trabajo_id,
+        trabajoId,
         trabajoNombre,
         fechaEntrega,
       },
@@ -282,6 +283,19 @@ function getString(value: unknown) {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function getNumber(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
 }
 
 function getEnvInt(name: string, defaultValue: number, min: number, max: number) {

@@ -22,14 +22,12 @@ import {
 } from '@/lib/catalogos-cache';
 import { upsertCachedTrabajoDetalle } from '@/lib/trabajos-cache';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/providers/auth-provider';
 import { useAppTheme } from '@/providers/theme-provider';
 
 type PickerField = 'recibido' | 'entrega' | null;
 
 export default function NuevoTrabajoScreen() {
   const { colors } = useAppTheme();
-  const { session } = useAuth();
   const styles = createStyles(colors);
 
   const [nombreTrabajo, setNombreTrabajo] = useState('');
@@ -194,7 +192,6 @@ export default function NuevoTrabajoScreen() {
         fecha_recibido: formatDateISO(recibido),
         fecha_entrega: entrega ? formatDateISO(entrega) : null,
         estado: 'creado',
-        owner_user_id: session?.user.id ?? null,
       })
       .select(
         'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
