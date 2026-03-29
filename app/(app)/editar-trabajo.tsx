@@ -23,7 +23,13 @@ import {
   replaceCachedClientesConTelefono,
   replaceCachedCatalogo,
 } from '@/lib/catalogos-cache';
-import { upsertCachedTrabajo } from '@/lib/trabajos-cache';
+import {
+  deleteCachedTrabajoById,
+  deleteCachedTrabajoDetalleById,
+  getCachedTrabajoDetalleById,
+  upsertCachedTrabajo,
+  upsertCachedTrabajoDetalle,
+} from '@/lib/trabajos-cache';
 import { supabase } from '@/lib/supabase';
 import { buildTrabajoTerminadoWhatsAppMessage, openWhatsAppChat } from '@/lib/whatsapp';
 import { useAuth } from '@/providers/auth-provider';
@@ -67,6 +73,7 @@ export default function EditarTrabajoScreen() {
 
   const [loadingData, setLoadingData] = useState(true);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const [loadingDelete, setLoadingDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -78,6 +85,30 @@ export default function EditarTrabajoScreen() {
 
     setLoadingData(true);
     setMessage(null);
+
+    let hasCachedDetalle = false;
+    try {
+      const cachedDetalle = await getCachedTrabajoDetalleById(trabajoId);
+      if (cachedDetalle) {
+        hasCachedDetalle = true;
+        setNombreTrabajo(cachedDetalle.nombreTrabajo);
+        setTipoTrabajoId(cachedDetalle.tipoTrabajoId);
+        setClienteId(cachedDetalle.clienteId);
+        setEspecialidadId(cachedDetalle.especialidadId);
+        setInstitucionId(cachedDetalle.institucionId);
+        setFechaRecibido(parseDateFromISO(cachedDetalle.fechaRecibido));
+        setFechaEntrega(
+          cachedDetalle.fechaEntrega ? parseDateFromISO(cachedDetalle.fechaEntrega) : null
+        );
+        const parsedCachedEstado = parseEstado(cachedDetalle.estado);
+        setEstado(parsedCachedEstado);
+        setEstadoOriginal(parsedCachedEstado);
+        setLoadingData(false);
+        setMessage('Mostrando detalle local. Sincronizando...');
+      }
+    } catch (cacheError) {
+      console.warn('No se pudo leer cache local del detalle de trabajo.', cacheError);
+    }
 
     let hasCachedCatalogs = false;
     try {
@@ -122,19 +153,29 @@ export default function EditarTrabajoScreen() {
       supabase
         .from('trabajos')
         .select(
-          'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado'
+          'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
         )
         .eq('id', trabajoId)
         .maybeSingle(),
     ]);
 
     if (trabajoRes.error) {
+      if (hasCachedDetalle) {
+        setLoadingData(false);
+        setMessage('No se pudo sincronizar detalle con Supabase. Usando cache local.');
+        return;
+      }
       setLoadingData(false);
       setMessage(`Error cargando datos: ${trabajoRes.error.message}`);
       return;
     }
 
     if (!trabajoRes.data) {
+      if (hasCachedDetalle) {
+        setLoadingData(false);
+        setMessage('No se encontro el trabajo en Supabase. Mostrando cache local.');
+        return;
+      }
       setLoadingData(false);
       setMessage('No se encontro el trabajo.');
       return;
@@ -186,6 +227,41 @@ export default function EditarTrabajoScreen() {
     const parsedEstado = parseEstado(trabajoRes.data.estado);
     setEstado(parsedEstado);
     setEstadoOriginal(parsedEstado);
+    try {
+      await upsertCachedTrabajoDetalle({
+        id: Number(trabajoRes.data.id),
+        nombreTrabajo: String(trabajoRes.data.nombre_trabajo ?? ''),
+        tipoTrabajoId: Number(trabajoRes.data.tipo_trabajo_id ?? 0),
+        clienteId: Number(trabajoRes.data.cliente_id ?? 0),
+        especialidadId: Number(trabajoRes.data.especialidad_id ?? 0),
+        institucionId:
+          trabajoRes.data.institucion_id === null ? null : Number(trabajoRes.data.institucion_id),
+        fechaRecibido: String(trabajoRes.data.fecha_recibido ?? formatDateISO(new Date())),
+        fechaEntrega: trabajoRes.data.fecha_entrega ? String(trabajoRes.data.fecha_entrega) : null,
+        estado: parsedEstado,
+        estadoCreadoAt: trabajoRes.data.estado_creado_at
+          ? String(trabajoRes.data.estado_creado_at)
+          : trabajoRes.data.created_at
+            ? String(trabajoRes.data.created_at)
+            : null,
+        estadoEnProcesoAt: trabajoRes.data.estado_en_proceso_at
+          ? String(trabajoRes.data.estado_en_proceso_at)
+          : null,
+        estadoTerminadoAt: trabajoRes.data.estado_terminado_at
+          ? String(trabajoRes.data.estado_terminado_at)
+          : null,
+        estadoEntregadoAt: trabajoRes.data.estado_entregado_at
+          ? String(trabajoRes.data.estado_entregado_at)
+          : null,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (cacheError) {
+      console.warn('No se pudo actualizar cache local del detalle de trabajo.', cacheError);
+    }
+
+    if (hasCachedDetalle && !firstCatalogError) {
+      setMessage(null);
+    }
     setLoadingData(false);
   }, [trabajoId]);
 
@@ -263,7 +339,7 @@ export default function EditarTrabajoScreen() {
       })
       .eq('id', trabajoId)
       .select(
-        'id,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
+        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
       )
       .maybeSingle();
 
@@ -294,6 +370,28 @@ export default function EditarTrabajoScreen() {
         estadoTerminadoAt: data.estado_terminado_at ? String(data.estado_terminado_at) : null,
         estadoEntregadoAt: data.estado_entregado_at ? String(data.estado_entregado_at) : null,
         estado,
+        updatedAt: new Date().toISOString(),
+      });
+
+      await upsertCachedTrabajoDetalle({
+        id: Number(data.id),
+        nombreTrabajo: String(data.nombre_trabajo ?? cleanNombre),
+        tipoTrabajoId: Number(data.tipo_trabajo_id ?? tipoTrabajoId),
+        clienteId: Number(data.cliente_id ?? clienteId),
+        especialidadId: Number(data.especialidad_id ?? especialidadId),
+        institucionId:
+          data.institucion_id === null ? null : Number(data.institucion_id ?? institucionId),
+        fechaRecibido: String(data.fecha_recibido ?? formatDateISO(recibido)),
+        fechaEntrega: data.fecha_entrega ? String(data.fecha_entrega) : null,
+        estado: parseEstado(data.estado),
+        estadoCreadoAt: data.estado_creado_at
+          ? String(data.estado_creado_at)
+          : data.created_at
+            ? String(data.created_at)
+            : null,
+        estadoEnProcesoAt: data.estado_en_proceso_at ? String(data.estado_en_proceso_at) : null,
+        estadoTerminadoAt: data.estado_terminado_at ? String(data.estado_terminado_at) : null,
+        estadoEntregadoAt: data.estado_entregado_at ? String(data.estado_entregado_at) : null,
         updatedAt: new Date().toISOString(),
       });
     } catch (cacheError) {
@@ -327,6 +425,41 @@ export default function EditarTrabajoScreen() {
     }
 
     showToast('Trabajo actualizado correctamente.', 'success');
+    router.replace('/(app)/(tabs)/trabajos');
+  };
+
+  const handleDelete = async () => {
+    if (!Number.isFinite(trabajoId)) {
+      setMessage('ID de trabajo invalido.');
+      return;
+    }
+
+    const shouldDelete = await confirmDeleteTrabajo();
+    if (!shouldDelete) {
+      return;
+    }
+
+    setLoadingDelete(true);
+    setMessage(null);
+
+    const { error } = await supabase.from('trabajos').delete().eq('id', trabajoId);
+
+    setLoadingDelete(false);
+
+    if (error) {
+      setMessage(`Error eliminando trabajo: ${error.message}`);
+      showToast('No se pudo eliminar el trabajo.', 'error');
+      return;
+    }
+
+    try {
+      await deleteCachedTrabajoById(trabajoId);
+      await deleteCachedTrabajoDetalleById(trabajoId);
+    } catch (cacheError) {
+      console.warn('No se pudo eliminar el trabajo del cache local.', cacheError);
+    }
+
+    showToast('Trabajo eliminado correctamente.', 'success');
     router.replace('/(app)/(tabs)/trabajos');
   };
 
@@ -453,11 +586,25 @@ export default function EditarTrabajoScreen() {
               </View>
             ) : null}
 
-            <Pressable disabled={loadingSubmit} onPress={handleSubmit} style={styles.button}>
+            <Pressable
+              disabled={loadingSubmit || loadingDelete}
+              onPress={handleSubmit}
+              style={styles.button}>
               {loadingSubmit ? (
                 <ActivityIndicator color={colors.buttonText} />
               ) : (
                 <Text style={styles.buttonText}>Guardar cambios</Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              disabled={loadingSubmit || loadingDelete}
+              onPress={handleDelete}
+              style={[styles.deleteButton, loadingDelete ? styles.deleteButtonDisabled : null]}>
+              {loadingDelete ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.deleteButtonText}>Eliminar trabajo</Text>
               )}
             </Pressable>
           </>
@@ -642,6 +789,39 @@ function confirmWhatsAppSend() {
   });
 }
 
+function confirmDeleteTrabajo() {
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const close = (value: boolean) => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+
+    Alert.alert(
+      'Eliminar trabajo',
+      'Esta accion no se puede deshacer. Deseas eliminar este trabajo?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+          onPress: () => close(false),
+        },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => close(true),
+        },
+      ],
+      {
+        cancelable: true,
+        onDismiss: () => close(false),
+      }
+    );
+  });
+}
+
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: {
@@ -752,6 +932,24 @@ function createStyles(colors: ThemeColors) {
     },
     buttonText: {
       color: colors.buttonText,
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    deleteButton: {
+      marginTop: 2,
+      borderRadius: 12,
+      backgroundColor: '#DC2626',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 13,
+      borderWidth: 1,
+      borderColor: '#B91C1C',
+    },
+    deleteButtonDisabled: {
+      opacity: 0.75,
+    },
+    deleteButtonText: {
+      color: '#FFFFFF',
       fontSize: 15,
       fontWeight: '700',
     },

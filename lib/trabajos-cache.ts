@@ -16,6 +16,23 @@ export type CachedTrabajo = {
   updatedAt: string;
 };
 
+export type CachedTrabajoDetalle = {
+  id: number;
+  nombreTrabajo: string;
+  tipoTrabajoId: number;
+  clienteId: number;
+  especialidadId: number;
+  institucionId: number | null;
+  fechaRecibido: string;
+  fechaEntrega: string | null;
+  estado: 'creado' | 'en_proceso' | 'terminado' | 'entregado';
+  estadoCreadoAt: string | null;
+  estadoEnProcesoAt: string | null;
+  estadoTerminadoAt: string | null;
+  estadoEntregadoAt: string | null;
+  updatedAt: string;
+};
+
 const DB_NAME = 'trabajos_local_cache.db';
 
 let initialized = false;
@@ -67,6 +84,25 @@ async function ensureSchema() {
       `create table if not exists cache_meta (
         key text primary key not null,
         value text not null
+      )`
+    );
+
+    await db.runAsync(
+      `create table if not exists trabajos_detalle_cache (
+        id integer primary key not null,
+        nombre_trabajo text not null,
+        tipo_trabajo_id integer not null,
+        cliente_id integer not null,
+        especialidad_id integer not null,
+        institucion_id integer,
+        fecha_recibido text not null,
+        fecha_entrega text,
+        estado text not null,
+        estado_creado_at text,
+        estado_en_proceso_at text,
+        estado_terminado_at text,
+        estado_entregado_at text,
+        updated_at text not null
       )`
     );
 
@@ -247,6 +283,129 @@ export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void>
         trabajo.updatedAt || new Date().toISOString(),
       ]
     );
+  });
+
+  await writeQueue;
+}
+
+export async function deleteCachedTrabajoById(trabajoId: number): Promise<void> {
+  writeQueue = writeQueue.then(async () => {
+    await ensureSchema();
+    const db = await dbPromise;
+    await db.runAsync(`delete from trabajos_cache where id = ?`, [trabajoId]);
+  });
+
+  await writeQueue;
+}
+
+export async function getCachedTrabajoDetalleById(
+  trabajoId: number
+): Promise<CachedTrabajoDetalle | null> {
+  await ensureSchema();
+  const db = await dbPromise;
+  const row = await db.getFirstAsync<{
+    id: number;
+    nombre_trabajo: string;
+    tipo_trabajo_id: number;
+    cliente_id: number;
+    especialidad_id: number;
+    institucion_id: number | null;
+    fecha_recibido: string;
+    fecha_entrega: string | null;
+    estado: string;
+    estado_creado_at: string | null;
+    estado_en_proceso_at: string | null;
+    estado_terminado_at: string | null;
+    estado_entregado_at: string | null;
+    updated_at: string;
+  }>(
+    `select id, nombre_trabajo, tipo_trabajo_id, cliente_id, especialidad_id, institucion_id,
+            fecha_recibido, fecha_entrega, estado, estado_creado_at, estado_en_proceso_at,
+            estado_terminado_at, estado_entregado_at, updated_at
+     from trabajos_detalle_cache
+     where id = ?`,
+    [trabajoId]
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    nombreTrabajo: row.nombre_trabajo,
+    tipoTrabajoId: row.tipo_trabajo_id,
+    clienteId: row.cliente_id,
+    especialidadId: row.especialidad_id,
+    institucionId: row.institucion_id,
+    fechaRecibido: row.fecha_recibido,
+    fechaEntrega: row.fecha_entrega,
+    estado: parseEstado(row.estado),
+    estadoCreadoAt: row.estado_creado_at ?? null,
+    estadoEnProcesoAt: row.estado_en_proceso_at ?? null,
+    estadoTerminadoAt: row.estado_terminado_at ?? null,
+    estadoEntregadoAt: row.estado_entregado_at ?? null,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function upsertCachedTrabajoDetalle(
+  detalle: CachedTrabajoDetalle
+): Promise<void> {
+  writeQueue = writeQueue.then(async () => {
+    await ensureSchema();
+    const db = await dbPromise;
+
+    await db.runAsync(
+      `insert into trabajos_detalle_cache (
+         id, nombre_trabajo, tipo_trabajo_id, cliente_id, especialidad_id, institucion_id,
+         fecha_recibido, fecha_entrega, estado, estado_creado_at, estado_en_proceso_at,
+         estado_terminado_at, estado_entregado_at, updated_at
+       )
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       on conflict(id) do update set
+         nombre_trabajo = excluded.nombre_trabajo,
+         tipo_trabajo_id = excluded.tipo_trabajo_id,
+         cliente_id = excluded.cliente_id,
+         especialidad_id = excluded.especialidad_id,
+         institucion_id = excluded.institucion_id,
+         fecha_recibido = excluded.fecha_recibido,
+         fecha_entrega = excluded.fecha_entrega,
+         estado = excluded.estado,
+         estado_creado_at = excluded.estado_creado_at,
+         estado_en_proceso_at = excluded.estado_en_proceso_at,
+         estado_terminado_at = excluded.estado_terminado_at,
+         estado_entregado_at = excluded.estado_entregado_at,
+         updated_at = excluded.updated_at`,
+      [
+        detalle.id,
+        detalle.nombreTrabajo,
+        detalle.tipoTrabajoId,
+        detalle.clienteId,
+        detalle.especialidadId,
+        detalle.institucionId,
+        detalle.fechaRecibido,
+        detalle.fechaEntrega ?? null,
+        detalle.estado,
+        detalle.estadoCreadoAt ?? null,
+        detalle.estadoEnProcesoAt ?? null,
+        detalle.estadoTerminadoAt ?? null,
+        detalle.estadoEntregadoAt ?? null,
+        detalle.updatedAt || new Date().toISOString(),
+      ]
+    );
+  });
+
+  await writeQueue;
+}
+
+export async function deleteCachedTrabajoDetalleById(
+  trabajoId: number
+): Promise<void> {
+  writeQueue = writeQueue.then(async () => {
+    await ensureSchema();
+    const db = await dbPromise;
+    await db.runAsync(`delete from trabajos_detalle_cache where id = ?`, [trabajoId]);
   });
 
   await writeQueue;

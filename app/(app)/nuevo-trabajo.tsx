@@ -20,6 +20,7 @@ import {
   replaceCachedClientesConTelefono,
   replaceCachedCatalogo,
 } from '@/lib/catalogos-cache';
+import { upsertCachedTrabajoDetalle } from '@/lib/trabajos-cache';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/auth-provider';
 import { useAppTheme } from '@/providers/theme-provider';
@@ -182,23 +183,56 @@ export default function NuevoTrabajoScreen() {
     setLoadingSubmit(true);
     setMessage(null);
 
-    const { error } = await supabase.from('trabajos').insert({
-      nombre_trabajo: cleanNombre,
-      tipo_trabajo_id: tipoTrabajoId,
-      cliente_id: clienteId,
-      especialidad_id: especialidadId,
-      institucion_id: institucionId,
-      fecha_recibido: formatDateISO(recibido),
-      fecha_entrega: entrega ? formatDateISO(entrega) : null,
-      estado: 'creado',
-      owner_user_id: session?.user.id ?? null,
-    });
+    const { data, error } = await supabase
+      .from('trabajos')
+      .insert({
+        nombre_trabajo: cleanNombre,
+        tipo_trabajo_id: tipoTrabajoId,
+        cliente_id: clienteId,
+        especialidad_id: especialidadId,
+        institucion_id: institucionId,
+        fecha_recibido: formatDateISO(recibido),
+        fecha_entrega: entrega ? formatDateISO(entrega) : null,
+        estado: 'creado',
+        owner_user_id: session?.user.id ?? null,
+      })
+      .select(
+        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
+      )
+      .maybeSingle();
 
     setLoadingSubmit(false);
 
     if (error) {
       setMessage(`Error: ${error.message}`);
       return;
+    }
+
+    if (data) {
+      try {
+        await upsertCachedTrabajoDetalle({
+          id: Number(data.id),
+          nombreTrabajo: String(data.nombre_trabajo ?? cleanNombre),
+          tipoTrabajoId: Number(data.tipo_trabajo_id ?? tipoTrabajoId),
+          clienteId: Number(data.cliente_id ?? clienteId),
+          especialidadId: Number(data.especialidad_id ?? especialidadId),
+          institucionId: data.institucion_id === null ? null : Number(data.institucion_id),
+          fechaRecibido: String(data.fecha_recibido ?? formatDateISO(recibido)),
+          fechaEntrega: data.fecha_entrega ? String(data.fecha_entrega) : null,
+          estado: parseEstado(data.estado),
+          estadoCreadoAt: data.estado_creado_at
+            ? String(data.estado_creado_at)
+            : data.created_at
+              ? String(data.created_at)
+              : null,
+          estadoEnProcesoAt: data.estado_en_proceso_at ? String(data.estado_en_proceso_at) : null,
+          estadoTerminadoAt: data.estado_terminado_at ? String(data.estado_terminado_at) : null,
+          estadoEntregadoAt: data.estado_entregado_at ? String(data.estado_entregado_at) : null,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (cacheError) {
+        console.warn('No se pudo actualizar cache local de detalle al crear trabajo.', cacheError);
+      }
     }
 
     setNombreTrabajo('');
@@ -344,6 +378,19 @@ function formatDateISO(date: Date) {
 
 function formatDateDisplay(date: Date) {
   return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+function parseEstado(rawValue: unknown): 'creado' | 'en_proceso' | 'terminado' | 'entregado' {
+  if (rawValue === 'entregado') {
+    return 'entregado';
+  }
+  if (rawValue === 'en_proceso') {
+    return 'en_proceso';
+  }
+  if (rawValue === 'terminado') {
+    return 'terminado';
+  }
+  return 'creado';
 }
 
 function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
