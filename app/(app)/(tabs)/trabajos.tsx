@@ -34,6 +34,10 @@ type TrabajoItem = {
   tipoTrabajo: string;
   tipoTrabajoColor: string | null;
   fechaEntrega: string | null;
+  estadoCreadoAt: string | null;
+  estadoEnProcesoAt: string | null;
+  estadoTerminadoAt: string | null;
+  estadoEntregadoAt: string | null;
   estado: EstadoTrabajo;
   updatedAt: string;
 };
@@ -120,7 +124,7 @@ export default function TrabajosScreen() {
     const { data, error } = await supabase
       .from("trabajos")
       .select(
-        "id,nombre_trabajo,estado,fecha_entrega,created_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,color)",
+        "id,nombre_trabajo,estado,fecha_entrega,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,color)",
       )
       .order("created_at", { ascending: false });
 
@@ -233,6 +237,10 @@ export default function TrabajosScreen() {
                   tipoTrabajo={item.tipoTrabajo}
                   tipoTrabajoColor={item.tipoTrabajoColor}
                   fechaEntrega={item.fechaEntrega}
+                  estadoCreadoAt={item.estadoCreadoAt}
+                  estadoEnProcesoAt={item.estadoEnProcesoAt}
+                  estadoTerminadoAt={item.estadoTerminadoAt}
+                  estadoEntregadoAt={item.estadoEntregadoAt}
                   estado={item.estado}
                   accentBorder
                   entregaAlertType={
@@ -275,6 +283,10 @@ function mapTrabajos(rows: unknown): TrabajoItem[] {
         estado?: string;
         fecha_entrega?: string | null;
         created_at?: string;
+        estado_creado_at?: string | null;
+        estado_en_proceso_at?: string | null;
+        estado_terminado_at?: string | null;
+        estado_entregado_at?: string | null;
         clientes?: unknown;
         especialidad?: unknown;
         tipo_trabajo?: unknown;
@@ -293,6 +305,20 @@ function mapTrabajos(rows: unknown): TrabajoItem[] {
         tipoTrabajoColor: tipoTrabajoInfo.color,
         fechaEntrega: typedRow.fecha_entrega
           ? String(typedRow.fecha_entrega)
+          : null,
+        estadoCreadoAt: typedRow.estado_creado_at
+          ? String(typedRow.estado_creado_at)
+          : typedRow.created_at
+            ? String(typedRow.created_at)
+            : null,
+        estadoEnProcesoAt: typedRow.estado_en_proceso_at
+          ? String(typedRow.estado_en_proceso_at)
+          : null,
+        estadoTerminadoAt: typedRow.estado_terminado_at
+          ? String(typedRow.estado_terminado_at)
+          : null,
+        estadoEntregadoAt: typedRow.estado_entregado_at
+          ? String(typedRow.estado_entregado_at)
           : null,
         estado: parseEstado(typedRow.estado),
         updatedAt: String(typedRow.created_at ?? new Date().toISOString()),

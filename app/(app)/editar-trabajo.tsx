@@ -262,7 +262,9 @@ export default function EditarTrabajoScreen() {
         owner_user_id: session?.user.id ?? null,
       })
       .eq('id', trabajoId)
-      .select('id')
+      .select(
+        'id,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
+      )
       .maybeSingle();
 
     setLoadingSubmit(false);
@@ -283,6 +285,14 @@ export default function EditarTrabajoScreen() {
         tipoTrabajo: getOptionLabel(tiposTrabajo, tipoTrabajoId, 'Sin tipo'),
         tipoTrabajoColor: tipoTrabajoId ? tipoTrabajoColorById[tipoTrabajoId] ?? null : null,
         fechaEntrega: entrega ? formatDateISO(entrega) : null,
+        estadoCreadoAt: data.estado_creado_at
+          ? String(data.estado_creado_at)
+          : data.created_at
+            ? String(data.created_at)
+            : new Date().toISOString(),
+        estadoEnProcesoAt: data.estado_en_proceso_at ? String(data.estado_en_proceso_at) : null,
+        estadoTerminadoAt: data.estado_terminado_at ? String(data.estado_terminado_at) : null,
+        estadoEntregadoAt: data.estado_entregado_at ? String(data.estado_entregado_at) : null,
         estado,
         updatedAt: new Date().toISOString(),
       });

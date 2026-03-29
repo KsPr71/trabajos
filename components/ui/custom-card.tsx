@@ -12,6 +12,10 @@ type TrabajoCustomCardProps = {
   tipoTrabajo: string;
   tipoTrabajoColor?: string | null;
   fechaEntrega: string | null;
+  estadoCreadoAt?: string | null;
+  estadoEnProcesoAt?: string | null;
+  estadoTerminadoAt?: string | null;
+  estadoEntregadoAt?: string | null;
   estado: TrabajoCardEstado;
   onPress: () => void;
   accentBorder?: boolean;
@@ -26,6 +30,10 @@ export function TrabajoCustomCard({
   tipoTrabajo,
   tipoTrabajoColor = null,
   fechaEntrega,
+  estadoCreadoAt = null,
+  estadoEnProcesoAt = null,
+  estadoTerminadoAt = null,
+  estadoEntregadoAt = null,
   estado,
   onPress,
   accentBorder = false,
@@ -45,6 +53,7 @@ export function TrabajoCustomCard({
   const resolvedEntregaAlertType =
     entregaAlertType ?? (showEntregaAlertChip ? "esta_semana" : null);
   const entregaAlertChip = getEntregaAlertChip(resolvedEntregaAlertType);
+  const tiempoLabel = getTiempoLabel(estado);
 
   return (
     <Pressable
@@ -90,8 +99,15 @@ export function TrabajoCustomCard({
                 {formatFechaEntrega(fechaEntrega)}
               </Text>
               <Text style={styles.metaText}>
-                <Text style={styles.metaLabel}>Plazo: </Text>
-                {getDiasRestantesTexto(fechaEntrega, estado)}
+                <Text style={styles.metaLabel}>{tiempoLabel}: </Text>
+                {getTiempoEstadoTexto({
+                  estado,
+                  fechaEntrega,
+                  estadoCreadoAt,
+                  estadoEnProcesoAt,
+                  estadoTerminadoAt,
+                  estadoEntregadoAt,
+                })}
               </Text>
             </View>
 
@@ -396,37 +412,59 @@ function formatFechaEntrega(fechaEntrega: string | null) {
   return `${day}/${month}/${year}`;
 }
 
-function getDiasRestantesTexto(
-  fechaEntrega: string | null,
-  estado: TrabajoCardEstado,
-) {
-  if (!fechaEntrega) {
-    return "Sin fecha";
+function getTiempoLabel(estado: TrabajoCardEstado) {
+  if (estado === "entregado") {
+    return "Entregado";
+  }
+  if (estado === "terminado") {
+    return "Terminado";
+  }
+  return "Plazo";
+}
+
+function getTiempoEstadoTexto(input: {
+  estado: TrabajoCardEstado;
+  fechaEntrega: string | null;
+  estadoCreadoAt: string | null;
+  estadoEnProcesoAt: string | null;
+  estadoTerminadoAt: string | null;
+  estadoEntregadoAt: string | null;
+}) {
+  const creadoAt =
+    parseAnyDate(input.estadoCreadoAt) ?? startOfDay(new Date());
+
+  if (input.estado === "entregado") {
+    const entregadoAt = parseAnyDate(input.estadoEntregadoAt);
+    if (!entregadoAt) {
+      return "Entregado";
+    }
+    return `Entregado el ${formatDateTimeDisplay(entregadoAt)}`;
   }
 
-  const parsedDate = parseISODate(fechaEntrega);
-  if (!parsedDate) {
-    return "Sin fecha";
+  if (input.estado === "terminado") {
+    const terminadoAt = parseAnyDate(input.estadoTerminadoAt);
+    if (!terminadoAt) {
+      return "Sin fecha de terminacion";
+    }
+    const diffDays = getDaysBetween(creadoAt, terminadoAt);
+    if (diffDays === 0) {
+      return "El mismo dia";
+    }
+    if (diffDays === 1) {
+      return "1 dia";
+    }
+    return `${Math.max(diffDays, 0)} dias`;
   }
 
-  const hoy = startOfDay(new Date());
-  const entrega = startOfDay(parsedDate);
-  const diffMs = entrega.getTime() - hoy.getTime();
-  const diffDays = Math.ceil(diffMs / 86400000);
-
-  if ((estado === "terminado" || estado === "entregado") && diffDays >= 0) {
-    return "Terminado en tiempo";
-  }
-  if (diffDays < 0) {
-    return "Pasado de fecha";
-  }
+  const now = startOfDay(new Date());
+  const diffDays = getDaysBetween(creadoAt, now);
   if (diffDays === 0) {
-    return "Entrega hoy";
+    return "0 dias desde creado";
   }
   if (diffDays === 1) {
-    return "1 dia restante";
+    return "1 dia desde creado";
   }
-  return `${diffDays} dias restantes`;
+  return `${Math.max(diffDays, 0)} dias desde creado`;
 }
 
 function parseISODate(value: string) {
@@ -439,6 +477,36 @@ function parseISODate(value: string) {
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function parseAnyDate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return parseISODate(value);
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
+function getDaysBetween(from: Date, to: Date) {
+  const fromDate = startOfDay(from);
+  const toDate = startOfDay(to);
+  const diffMs = toDate.getTime() - fromDate.getTime();
+  return Math.floor(diffMs / 86400000);
+}
+
+function formatDateTimeDisplay(date: Date) {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 function normalizeHexColor(value: string | null | undefined) {

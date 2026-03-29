@@ -8,6 +8,10 @@ export type CachedTrabajo = {
   tipoTrabajo: string;
   tipoTrabajoColor: string | null;
   fechaEntrega: string | null;
+  estadoCreadoAt: string | null;
+  estadoEnProcesoAt: string | null;
+  estadoTerminadoAt: string | null;
+  estadoEntregadoAt: string | null;
   estado: 'creado' | 'en_proceso' | 'terminado' | 'entregado';
   updatedAt: string;
 };
@@ -42,6 +46,10 @@ async function ensureSchema() {
         tipo_trabajo text not null default '',
         tipo_trabajo_color text,
         fecha_entrega text,
+        estado_creado_at text,
+        estado_en_proceso_at text,
+        estado_terminado_at text,
+        estado_entregado_at text,
         estado text not null,
         updated_at text not null
       )`
@@ -50,6 +58,10 @@ async function ensureSchema() {
     await ensureColumn(db, 'trabajos_cache', 'tipo_trabajo');
     await ensureColumn(db, 'trabajos_cache', 'tipo_trabajo_color');
     await ensureColumn(db, 'trabajos_cache', 'fecha_entrega');
+    await ensureColumn(db, 'trabajos_cache', 'estado_creado_at');
+    await ensureColumn(db, 'trabajos_cache', 'estado_en_proceso_at');
+    await ensureColumn(db, 'trabajos_cache', 'estado_terminado_at');
+    await ensureColumn(db, 'trabajos_cache', 'estado_entregado_at');
 
     await db.runAsync(
       `create table if not exists cache_meta (
@@ -71,7 +83,14 @@ async function ensureSchema() {
 async function ensureColumn(
   db: SQLite.SQLiteDatabase,
   tableName: 'trabajos_cache',
-  columnName: 'tipo_trabajo' | 'tipo_trabajo_color' | 'fecha_entrega'
+  columnName:
+    | 'tipo_trabajo'
+    | 'tipo_trabajo_color'
+    | 'fecha_entrega'
+    | 'estado_creado_at'
+    | 'estado_en_proceso_at'
+    | 'estado_terminado_at'
+    | 'estado_entregado_at'
 ) {
   const columns = await db.getAllAsync<{ name: string }>(`pragma table_info(${tableName})`);
   const exists = columns.some((column) => column.name === columnName);
@@ -90,7 +109,12 @@ async function ensureColumn(
     return;
   }
 
-  await db.runAsync(`alter table ${tableName} add column fecha_entrega text`);
+  if (columnName === 'fecha_entrega') {
+    await db.runAsync(`alter table ${tableName} add column fecha_entrega text`);
+    return;
+  }
+
+  await db.runAsync(`alter table ${tableName} add column ${columnName} text`);
 }
 
 export async function getCachedTrabajos(): Promise<CachedTrabajo[]> {
@@ -105,10 +129,16 @@ export async function getCachedTrabajos(): Promise<CachedTrabajo[]> {
     tipo_trabajo: string;
     tipo_trabajo_color: string | null;
     fecha_entrega: string | null;
+    estado_creado_at: string | null;
+    estado_en_proceso_at: string | null;
+    estado_terminado_at: string | null;
+    estado_entregado_at: string | null;
     estado: string;
     updated_at: string;
   }>(
-    `select id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, fecha_entrega, estado, updated_at
+    `select id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, fecha_entrega,
+            estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at,
+            estado, updated_at
      from trabajos_cache
      order by updated_at desc, id desc`
   );
@@ -121,6 +151,10 @@ export async function getCachedTrabajos(): Promise<CachedTrabajo[]> {
     tipoTrabajo: row.tipo_trabajo ?? '',
     tipoTrabajoColor: row.tipo_trabajo_color ?? null,
     fechaEntrega: row.fecha_entrega ?? null,
+    estadoCreadoAt: row.estado_creado_at ?? null,
+    estadoEnProcesoAt: row.estado_en_proceso_at ?? null,
+    estadoTerminadoAt: row.estado_terminado_at ?? null,
+    estadoEntregadoAt: row.estado_entregado_at ?? null,
     estado: parseEstado(row.estado),
     updatedAt: row.updated_at,
   }));
@@ -137,8 +171,12 @@ export async function replaceCachedTrabajos(trabajos: CachedTrabajo[]): Promise<
 
       for (const trabajo of trabajos) {
         await db.runAsync(
-          `insert into trabajos_cache (id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, fecha_entrega, estado, updated_at)
-           values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `insert into trabajos_cache (
+             id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, fecha_entrega,
+             estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at,
+             estado, updated_at
+           )
+           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             trabajo.id,
             trabajo.nombreTrabajo,
@@ -147,6 +185,10 @@ export async function replaceCachedTrabajos(trabajos: CachedTrabajo[]): Promise<
             trabajo.tipoTrabajo ?? '',
             trabajo.tipoTrabajoColor ?? null,
             trabajo.fechaEntrega ?? null,
+            trabajo.estadoCreadoAt ?? null,
+            trabajo.estadoEnProcesoAt ?? null,
+            trabajo.estadoTerminadoAt ?? null,
+            trabajo.estadoEntregadoAt ?? null,
             trabajo.estado,
             trabajo.updatedAt || now,
           ]
@@ -170,8 +212,12 @@ export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void>
     const db = await dbPromise;
 
     await db.runAsync(
-      `insert into trabajos_cache (id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, fecha_entrega, estado, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `insert into trabajos_cache (
+         id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, fecha_entrega,
+         estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at,
+         estado, updated_at
+       )
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(id) do update set
          nombre_trabajo = excluded.nombre_trabajo,
          autor = excluded.autor,
@@ -179,6 +225,10 @@ export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void>
          tipo_trabajo = excluded.tipo_trabajo,
          tipo_trabajo_color = excluded.tipo_trabajo_color,
          fecha_entrega = excluded.fecha_entrega,
+         estado_creado_at = excluded.estado_creado_at,
+         estado_en_proceso_at = excluded.estado_en_proceso_at,
+         estado_terminado_at = excluded.estado_terminado_at,
+         estado_entregado_at = excluded.estado_entregado_at,
          estado = excluded.estado,
          updated_at = excluded.updated_at`,
       [
@@ -189,6 +239,10 @@ export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void>
         trabajo.tipoTrabajo ?? '',
         trabajo.tipoTrabajoColor ?? null,
         trabajo.fechaEntrega ?? null,
+        trabajo.estadoCreadoAt ?? null,
+        trabajo.estadoEnProcesoAt ?? null,
+        trabajo.estadoTerminadoAt ?? null,
+        trabajo.estadoEntregadoAt ?? null,
         trabajo.estado,
         trabajo.updatedAt || new Date().toISOString(),
       ]
