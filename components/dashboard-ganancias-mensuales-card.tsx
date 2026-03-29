@@ -23,7 +23,10 @@ export function DashboardGananciasMensualesCard({
 }: DashboardGananciasMensualesCardProps) {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
-  const maxTotal = items.reduce((max, item) => Math.max(max, item.total), 0);
+  const totalGeneral = items.reduce((acc, item) => {
+    const totalMes = item.total > 0 ? item.total : item.recibidas + item.esperadas;
+    return acc + totalMes;
+  }, 0);
 
   return (
     <View style={styles.card}>
@@ -61,9 +64,9 @@ export function DashboardGananciasMensualesCard({
           <View style={styles.chartWrap}>
             {items.map((item) => {
               const receivedWidth =
-                maxTotal > 0 ? (item.recibidas / maxTotal) * 100 : 0;
+                totalGeneral > 0 ? (item.recibidas / totalGeneral) * 100 : 0;
               const expectedWidth =
-                maxTotal > 0 ? (item.esperadas / maxTotal) * 100 : 0;
+                totalGeneral > 0 ? (item.esperadas / totalGeneral) * 100 : 0;
 
               return (
                 <View key={item.key} style={styles.chartRow}>

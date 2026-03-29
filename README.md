@@ -27,8 +27,10 @@ Este proyecto ya incluye la modalidad:
 ### Archivos clave
 
 - Migracion: `supabase/migrations/20260328113000_add_push_notifications_infra.sql`
+- Migracion cola + triggers SQL: `supabase/migrations/20260329101500_add_notification_queue_and_triggers.sql`
 - Registro de token en app: `lib/push-notifications.ts`
-- Envio al crear trabajo: `supabase/functions/push-trabajo-created/index.ts`
+- Cola push (processor): `supabase/functions/push-process-queue/index.ts`
+- Envio directo/manual de prueba: `supabase/functions/push-trabajo-created/index.ts`
 - Recordatorios diarios: `supabase/functions/push-daily-reminders/index.ts`
 
 ### 1) Aplicar migraciones
@@ -41,6 +43,7 @@ supabase db push
 
 ```bash
 supabase functions deploy push-trabajo-created
+supabase functions deploy push-process-queue
 supabase functions deploy push-daily-reminders
 ```
 
@@ -50,7 +53,19 @@ supabase functions deploy push-daily-reminders
 supabase secrets set PUSH_REMINDERS_CRON_SECRET=tu_secreto_largo
 ```
 
-### 4) Programar ejecucion diaria (ej: 09:00)
+### 4) Programar procesador de cola (frecuente)
+
+Este endpoint procesa la tabla `notification_queue` (poblada por triggers SQL en `trabajos`):
+
+`https://<PROJECT_REF>.supabase.co/functions/v1/push-process-queue`
+
+Headers:
+
+`x-cron-secret: <PUSH_REMINDERS_CRON_SECRET>`
+
+Frecuencia recomendada: cada 1-5 minutos.
+
+### 5) Programar recordatorio diario (ej: 09:00)
 
 Realiza un `POST` diario a:
 

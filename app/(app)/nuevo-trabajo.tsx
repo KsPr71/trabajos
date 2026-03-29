@@ -201,13 +201,6 @@ export default function NuevoTrabajoScreen() {
       return;
     }
 
-    notifyTrabajoCreadoPush({
-      trabajoNombre: cleanNombre,
-      fechaEntrega: entrega ? formatDateISO(entrega) : null,
-    }).catch((notifyError) => {
-      console.warn('No se pudo enviar push de trabajo creado.', notifyError);
-    });
-
     setNombreTrabajo('');
     setTipoTrabajoId(null);
     setClienteId(null);
@@ -463,29 +456,4 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       fontSize: 13,
     },
   });
-}
-
-async function notifyTrabajoCreadoPush(input: {
-  trabajoNombre: string;
-  fechaEntrega: string | null;
-}) {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const { error } = await supabase.functions.invoke('push-trabajo-created', {
-    headers: session?.access_token
-      ? {
-          Authorization: `Bearer ${session.access_token}`,
-        }
-      : undefined,
-    body: {
-      trabajoNombre: input.trabajoNombre,
-      fechaEntrega: input.fechaEntrega,
-    },
-  });
-
-  if (error) {
-    throw error;
-  }
 }
