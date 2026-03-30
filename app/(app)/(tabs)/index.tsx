@@ -52,10 +52,10 @@ const ESTADO_ORDER: EstadoTrabajo[] = [
 ];
 
 const ESTADO_META: Record<EstadoTrabajo, { label: string; color: string }> = {
-  creado: { label: "Creado", color: "#2563EB" },
-  en_proceso: { label: "En proceso", color: "#0891B2" },
+  creado: { label: "Creado", color: "#0EA5E9" },
+  en_proceso: { label: "En proceso", color: "#D946EF" },
   terminado: { label: "Terminado", color: "#22A06B" },
-  entregado: { label: "Entregado", color: "#059669" },
+  entregado: { label: "Entregado", color: "#1D4ED8" },
 };
 
 export default function DashboardScreen() {

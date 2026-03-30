@@ -129,7 +129,7 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
   if (estado === "entregado") {
     return {
       label: "Entregado",
-      backgroundColor: "#059669",
+      backgroundColor: "#1D4ED8",
       textColor: "#FFFFFF",
     };
   }
@@ -143,13 +143,13 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
   if (estado === "en_proceso") {
     return {
       label: "En proceso",
-      backgroundColor: "#0891B2",
+      backgroundColor: "#D946EF",
       textColor: "#FFFFFF",
     };
   }
   return {
     label: "Creado",
-    backgroundColor: colors.buttonBg,
+    backgroundColor: "#0EA5E9",
     textColor: colors.buttonText,
   };
 }

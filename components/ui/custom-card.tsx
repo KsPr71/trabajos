@@ -358,7 +358,7 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
   if (estado === "entregado") {
     return {
       label: "Entregado",
-      backgroundColor: "#059669",
+      backgroundColor: "#1D4ED8",
       textColor: "#FFFFFF",
     };
   }
@@ -372,13 +372,13 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
   if (estado === "en_proceso") {
     return {
       label: "En proceso",
-      backgroundColor: "#0891B2",
+      backgroundColor: "#D946EF",
       textColor: "#FFFFFF",
     };
   }
   return {
     label: "Creado",
-    backgroundColor: colors.buttonBg,
+    backgroundColor: "#0EA5E9",
     textColor: colors.buttonText,
   };
 }
@@ -430,15 +430,14 @@ function getTiempoEstadoTexto(input: {
   estadoTerminadoAt: string | null;
   estadoEntregadoAt: string | null;
 }) {
-  const creadoAt =
-    parseAnyDate(input.estadoCreadoAt) ?? startOfDay(new Date());
+  const creadoAt = parseAnyDate(input.estadoCreadoAt) ?? startOfDay(new Date());
 
   if (input.estado === "entregado") {
     const entregadoAt = parseAnyDate(input.estadoEntregadoAt);
     if (!entregadoAt) {
-      return "Entregado";
+      return "Sin fecha";
     }
-    return `Entregado el ${formatDateTimeDisplay(entregadoAt)}`;
+    return `Día ${formatDateTimeDisplay(entregadoAt)}`;
   }
 
   if (input.estado === "terminado") {
@@ -456,15 +455,26 @@ function getTiempoEstadoTexto(input: {
     return `${Math.max(diffDays, 0)} dias`;
   }
 
+  const entregaAt = input.fechaEntrega
+    ? parseISODate(input.fechaEntrega)
+    : null;
+  if (!entregaAt) {
+    return "Sin fecha de entrega";
+  }
+
   const now = startOfDay(new Date());
-  const diffDays = getDaysBetween(creadoAt, now);
+  const diffDays = getDaysBetween(now, entregaAt);
+
+  if (diffDays < 0) {
+    return "Pasado de fecha";
+  }
   if (diffDays === 0) {
-    return "0 dias desde creado";
+    return "Entrega hoy";
   }
   if (diffDays === 1) {
-    return "1 dia desde creado";
+    return "1 dia restante";
   }
-  return `${Math.max(diffDays, 0)} dias desde creado`;
+  return `${diffDays} dias restantes`;
 }
 
 function parseISODate(value: string) {

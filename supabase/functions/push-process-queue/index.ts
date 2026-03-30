@@ -9,7 +9,12 @@ type QueueRow = {
   id: number;
   user_id: string;
   trabajo_id: number | null;
-  event_type: 'trabajo_creado' | 'trabajo_terminado' | string;
+  event_type:
+    | 'trabajo_creado'
+    | 'trabajo_en_proceso'
+    | 'trabajo_terminado'
+    | 'trabajo_entregado'
+    | string;
   payload: Record<string, unknown> | null;
   attempt_count: number;
   max_attempts: number;
@@ -233,6 +238,32 @@ function buildMessageContent(row: QueueRow): MessageContent | null {
       body: `"${trabajoNombre}" esta terminado y listo para gestionar entrega.`,
       data: {
         type: 'trabajo_terminado',
+        trabajoId,
+        trabajoNombre,
+        fechaEntrega,
+      },
+    };
+  }
+
+  if (row.event_type === 'trabajo_en_proceso') {
+    return {
+      title: 'Trabajo en proceso',
+      body: `"${trabajoNombre}" paso a en proceso.`,
+      data: {
+        type: 'trabajo_en_proceso',
+        trabajoId,
+        trabajoNombre,
+        fechaEntrega,
+      },
+    };
+  }
+
+  if (row.event_type === 'trabajo_entregado') {
+    return {
+      title: 'Trabajo entregado',
+      body: `"${trabajoNombre}" fue marcado como entregado.`,
+      data: {
+        type: 'trabajo_entregado',
         trabajoId,
         trabajoNombre,
         fechaEntrega,
