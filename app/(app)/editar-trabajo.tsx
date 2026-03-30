@@ -1,7 +1,7 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -73,6 +73,7 @@ export default function EditarTrabajoScreen() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [loadingDelete, setLoadingDelete] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const estadoTouchedRef = useRef(false);
 
   const loadData = useCallback(async () => {
     if (!Number.isFinite(trabajoId)) {
@@ -83,6 +84,7 @@ export default function EditarTrabajoScreen() {
 
     setLoadingData(true);
     setMessage(null);
+    estadoTouchedRef.current = false;
 
     let hasCachedDetalle = false;
     try {
@@ -223,7 +225,9 @@ export default function EditarTrabajoScreen() {
       trabajoRes.data.fecha_entrega ? parseDateFromISO(String(trabajoRes.data.fecha_entrega)) : null
     );
     const parsedEstado = parseEstado(trabajoRes.data.estado);
-    setEstado(parsedEstado);
+    if (!estadoTouchedRef.current) {
+      setEstado(parsedEstado);
+    }
     setEstadoOriginal(parsedEstado);
     try {
       await upsertCachedTrabajoDetalle({
@@ -295,6 +299,11 @@ export default function EditarTrabajoScreen() {
     if (Platform.OS !== 'ios') {
       setPickerField(null);
     }
+  };
+
+  const handleEstadoChange = (nextEstado: EstadoTrabajo) => {
+    estadoTouchedRef.current = true;
+    setEstado(nextEstado);
   };
 
   const handleSubmit = async () => {
@@ -524,28 +533,28 @@ export default function EditarTrabajoScreen() {
                   label="Creado"
                   value="creado"
                   selected={estado === 'creado'}
-                  onPress={() => setEstado('creado')}
+                  onPress={() => handleEstadoChange('creado')}
                   colors={colors}
                 />
                 <EstadoOption
                   label="En proceso"
                   value="en_proceso"
                   selected={estado === 'en_proceso'}
-                  onPress={() => setEstado('en_proceso')}
+                  onPress={() => handleEstadoChange('en_proceso')}
                   colors={colors}
                 />
                 <EstadoOption
                   label="Terminado"
                   value="terminado"
                   selected={estado === 'terminado'}
-                  onPress={() => setEstado('terminado')}
+                  onPress={() => handleEstadoChange('terminado')}
                   colors={colors}
                 />
                 <EstadoOption
                   label="Entregado"
                   value="entregado"
                   selected={estado === 'entregado'}
-                  onPress={() => setEstado('entregado')}
+                  onPress={() => handleEstadoChange('entregado')}
                   colors={colors}
                 />
               </View>
