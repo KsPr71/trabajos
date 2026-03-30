@@ -108,7 +108,9 @@ export default function DashboardScreen() {
 
     if (!remoteResult.payload) {
       if (!hasLocalSnapshot) {
-        setErrorMessage(remoteResult.errorMessage ?? "No se pudo cargar el dashboard.");
+        setErrorMessage(
+          remoteResult.errorMessage ?? "No se pudo cargar el dashboard.",
+        );
         setLoading(false);
       } else {
         setSyncInfo("Sin conexion a Supabase. Mostrando datos locales.");
@@ -119,12 +121,17 @@ export default function DashboardScreen() {
     applyDashboardPayload(remoteResult.payload);
     setErrorMessage(null);
     setLoading(false);
-    setSyncInfo(`Sincronizado con Supabase: ${formatDateTime(new Date().toISOString())}`);
+    setSyncInfo(
+      `Sincronizado con Supabase: ${formatDateTime(new Date().toISOString())}`,
+    );
 
     try {
       await replaceCachedDashboardSnapshot(remoteResult.payload);
     } catch (cacheError) {
-      console.warn("No se pudo actualizar cache local del dashboard.", cacheError);
+      console.warn(
+        "No se pudo actualizar cache local del dashboard.",
+        cacheError,
+      );
     }
   }, [applyDashboardPayload]);
 
@@ -143,9 +150,7 @@ export default function DashboardScreen() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Trabajos por tipo y estado</Text>
-        <Text style={styles.sectionSubtitle}>
-          Grafico de barras apiladas: cada barra representa un tipo de trabajo.
-        </Text>
+        <Text style={styles.sectionSubtitle}>Tipos de trabajo.</Text>
 
         {loading ? (
           <View style={styles.stateBox}>
@@ -227,7 +232,7 @@ export default function DashboardScreen() {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Ganancias</Text>
         <Text style={styles.sectionSubtitle}>
-          Entregados usan precio aplicado en su fecha de entrega.
+          El precio se establece al momento del contrato.
         </Text>
 
         {loading ? (
@@ -323,7 +328,9 @@ function buildDashboardPayloadFromRows(rows: unknown): DashboardPayload {
   };
 }
 
-function normalizeDashboardPayload(rawPayload: unknown): DashboardPayload | null {
+function normalizeDashboardPayload(
+  rawPayload: unknown,
+): DashboardPayload | null {
   if (!rawPayload || typeof rawPayload !== "object") {
     return null;
   }
@@ -364,7 +371,9 @@ function normalizeResumenPorTipo(value: unknown): ResumenTipoEstado[] {
         row.estadoCounts ??
         {}) as Record<string, unknown>;
 
-      const tipoTrabajo = String(row.tipo_trabajo ?? row.tipoTrabajo ?? "Sin tipo");
+      const tipoTrabajo = String(
+        row.tipo_trabajo ?? row.tipoTrabajo ?? "Sin tipo",
+      );
 
       const estadoCounts: Record<EstadoTrabajo, number> = {
         creado: toNumber(estadoCountsRaw.creado),
@@ -430,9 +439,8 @@ function normalizeGananciasPorMes(value: unknown): GananciaMensualItem[] {
         total: totalFromPayload > 0 ? totalFromPayload : esperadas + recibidas,
       };
     })
-    .filter(
-      (item): item is GananciaMensualItem =>
-        Boolean(item && item.key.length > 0 && item.mesLabel.length > 0),
+    .filter((item): item is GananciaMensualItem =>
+      Boolean(item && item.key.length > 0 && item.mesLabel.length > 0),
     )
     .sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -450,7 +458,9 @@ function normalizeEntregasPorMes(value: unknown): EntregasMesGroup[] {
 
       const row = item as Record<string, unknown>;
       const trabajos = Array.isArray(row.trabajos)
-        ? row.trabajos.map((trabajo) => String(trabajo)).filter((trabajo) => trabajo.length > 0)
+        ? row.trabajos
+            .map((trabajo) => String(trabajo))
+            .filter((trabajo) => trabajo.length > 0)
         : [];
 
       return {
@@ -459,9 +469,8 @@ function normalizeEntregasPorMes(value: unknown): EntregasMesGroup[] {
         trabajos,
       };
     })
-    .filter(
-      (item): item is EntregasMesGroup =>
-        Boolean(item && item.key.length > 0 && item.mesLabel.length > 0),
+    .filter((item): item is EntregasMesGroup =>
+      Boolean(item && item.key.length > 0 && item.mesLabel.length > 0),
     )
     .sort((a, b) => a.key.localeCompare(b.key));
 }
@@ -530,11 +539,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
     legendItem: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
+      gap: 4,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 999,
-      paddingHorizontal: 10,
+      paddingHorizontal: 5,
       paddingVertical: 5,
       backgroundColor: colors.inputBg,
     },
@@ -545,7 +554,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
     },
     legendText: {
       color: colors.inputText,
-      fontSize: 12,
+      fontSize: 10,
       fontWeight: "700",
     },
     chartWrap: {
@@ -728,7 +737,8 @@ function buildGanancias(rows: unknown): GananciasResumen {
 
     if (estado === "entregado") {
       const precioAplicado = parsePrecioNullable(typedRow.precio_aplicado);
-      recibidas += precioAplicado ?? getTipoTrabajoPrecio(typedRow.tipo_trabajo);
+      recibidas +=
+        precioAplicado ?? getTipoTrabajoPrecio(typedRow.tipo_trabajo);
     } else {
       esperadas += getTipoTrabajoPrecio(typedRow.tipo_trabajo);
     }
@@ -790,7 +800,13 @@ function buildGananciasPorMes(rows: unknown): GananciaMensualItem[] {
 
   const grouped = new Map<
     string,
-    { key: string; mesLabel: string; esperadas: number; recibidas: number; total: number }
+    {
+      key: string;
+      mesLabel: string;
+      esperadas: number;
+      recibidas: number;
+      total: number;
+    }
   >();
 
   for (const row of rows) {
@@ -836,7 +852,9 @@ function buildGananciasPorMes(rows: unknown): GananciaMensualItem[] {
     grouped.set(key, current);
   }
 
-  return Array.from(grouped.values()).sort((a, b) => a.key.localeCompare(b.key));
+  return Array.from(grouped.values()).sort((a, b) =>
+    a.key.localeCompare(b.key),
+  );
 }
 
 function buildEntregasPorMes(rows: unknown): EntregasMesGroup[] {
@@ -872,7 +890,9 @@ function buildEntregasPorMes(rows: unknown): EntregasMesGroup[] {
     const month = entregaDate.getMonth();
     const key = `${year}-${String(month + 1).padStart(2, "0")}`;
     const label = `${MONTH_NAMES_ES[month]} ${year}`;
-    const nombreTrabajo = String(typedRow.nombre_trabajo ?? "Trabajo sin nombre");
+    const nombreTrabajo = String(
+      typedRow.nombre_trabajo ?? "Trabajo sin nombre",
+    );
 
     const current = grouped.get(key) ?? {
       key,

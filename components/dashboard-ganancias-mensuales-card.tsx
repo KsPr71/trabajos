@@ -24,16 +24,15 @@ export function DashboardGananciasMensualesCard({
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const totalGeneral = items.reduce((acc, item) => {
-    const totalMes = item.total > 0 ? item.total : item.recibidas + item.esperadas;
+    const totalMes =
+      item.total > 0 ? item.total : item.recibidas + item.esperadas;
     return acc + totalMes;
   }, 0);
 
   return (
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>Ganancias por meses</Text>
-      <Text style={styles.sectionSubtitle}>
-        Grafico mensual de ganancias recibidas y esperadas.
-      </Text>
+      <Text style={styles.sectionSubtitle}> Total de ganancias por meses</Text>
 
       {loading ? (
         <View style={styles.stateBox}>
@@ -42,21 +41,29 @@ export function DashboardGananciasMensualesCard({
         </View>
       ) : errorMessage ? (
         <View style={styles.stateBox}>
-          <Text style={styles.stateText}>Error cargando grafico: {errorMessage}</Text>
+          <Text style={styles.stateText}>
+            Error cargando grafico: {errorMessage}
+          </Text>
         </View>
       ) : items.length === 0 ? (
         <View style={styles.stateBox}>
-          <Text style={styles.stateText}>No hay datos con fecha de entrega para graficar.</Text>
+          <Text style={styles.stateText}>
+            No hay datos con fecha de entrega para graficar.
+          </Text>
         </View>
       ) : (
         <>
           <View style={styles.legendRow}>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: "#16A34A" }]} />
+              <View
+                style={[styles.legendDot, { backgroundColor: "#16A34A" }]}
+              />
               <Text style={styles.legendText}>Recibidas</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: "#D97706" }]} />
+              <View
+                style={[styles.legendDot, { backgroundColor: "#D97706" }]}
+              />
               <Text style={styles.legendText}>Esperadas</Text>
             </View>
           </View>
@@ -72,7 +79,9 @@ export function DashboardGananciasMensualesCard({
                 <View key={item.key} style={styles.chartRow}>
                   <View style={styles.rowHeader}>
                     <Text style={styles.rowLabel}>{item.mesLabel}</Text>
-                    <Text style={styles.rowTotal}>{formatMoney(item.total)}</Text>
+                    <Text style={styles.rowTotal}>
+                      {formatMoney(item.total)}
+                    </Text>
                   </View>
 
                   <View style={styles.track}>
@@ -80,7 +89,10 @@ export function DashboardGananciasMensualesCard({
                       <View
                         style={[
                           styles.segment,
-                          { width: `${receivedWidth}%`, backgroundColor: "#16A34A" },
+                          {
+                            width: `${receivedWidth}%`,
+                            backgroundColor: "#16A34A",
+                          },
                         ]}
                       />
                     ) : null}
@@ -88,7 +100,10 @@ export function DashboardGananciasMensualesCard({
                       <View
                         style={[
                           styles.segment,
-                          { width: `${expectedWidth}%`, backgroundColor: "#D97706" },
+                          {
+                            width: `${expectedWidth}%`,
+                            backgroundColor: "#D97706",
+                          },
                         ]}
                       />
                     ) : null}
@@ -214,7 +229,10 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
 function formatMoney(value: number) {
   const abs = Math.abs(value);
   const [integerPart, decimalPart] = abs.toFixed(2).split(".");
-  const integerWithSeparator = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const integerWithSeparator = integerPart.replace(
+    /\B(?=(\d{3})+(?!\d))/g,
+    ".",
+  );
   const sign = value < 0 ? "-" : "";
   return `${sign}$${integerWithSeparator},${decimalPart}`;
 }
