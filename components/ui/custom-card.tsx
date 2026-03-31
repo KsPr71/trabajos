@@ -65,6 +65,8 @@ export function TrabajoCustomCard({
       </View>
 
       <View style={styles.cardBody}>
+        {estado === "entregado" ? <PaidCornerTriangle styles={styles} /> : null}
+
         <View
           style={[
             styles.titleContainer,
@@ -163,6 +165,19 @@ export function TrabajoCustomCard({
         </View>
       </View>
     </Pressable>
+  );
+}
+
+function PaidCornerTriangle({
+  styles,
+}: {
+  styles: ReturnType<typeof createTrabajoStyles>;
+}) {
+  return (
+    <View pointerEvents="none" style={styles.paidCornerWrap}>
+      <View style={styles.paidCornerTriangle} />
+      <Text style={styles.paidCornerText}>PAGADO</Text>
+    </View>
   );
 }
 
@@ -270,6 +285,35 @@ function createTrabajoStyles(colors: ThemeColors) {
       elevation: 4,
       overflow: "hidden",
       padding: 10,
+    },
+    paidCornerWrap: {
+      position: "absolute",
+      top: 0,
+      right: 0,
+      width: 88,
+      height: 88,
+      zIndex: 20,
+    },
+    paidCornerTriangle: {
+      position: "absolute",
+      top: 0,
+      right: 0,
+      width: 0,
+      height: 0,
+      borderTopWidth: 88,
+      borderLeftWidth: 88,
+      borderTopColor: "rgba(36, 240, 111, 0.5)",
+      borderLeftColor: "transparent",
+    },
+    paidCornerText: {
+      position: "absolute",
+      top: 30,
+      right: 10,
+      fontSize: 10,
+      fontWeight: "800",
+      letterSpacing: 0.4,
+      color: "#14532D",
+      transform: [{ rotate: "45deg" }],
     },
     titleContainer: {
       paddingHorizontal: 16,
