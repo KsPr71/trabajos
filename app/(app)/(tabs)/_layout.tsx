@@ -16,7 +16,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.headerBg },
         headerTintColor: colors.headerText,
-        sceneStyle: { paddingBottom: 14 },
+        sceneStyle: { paddingBottom: 0 },
         headerTitleAlign: "left",
         headerLeft: () => (
           <View style={styles.headerLeft}>
@@ -26,7 +26,10 @@ export default function TabsLayout() {
         ),
         tabBarStyle: {
           backgroundColor: colors.tabBg,
-          borderTopColor: colors.tabBorder,
+          borderTopColor: colors.tabBg,
+          borderTopWidth: 1,
+          elevation: 0,
+          shadowOpacity: 0,
           height: 100,
           paddingBottom: 12,
           paddingTop: 6,
@@ -145,7 +148,7 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -18,
+    marginTop: -15,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,

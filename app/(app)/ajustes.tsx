@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { registerPushTokenForUser, runPushDiagnostics } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
@@ -7,7 +7,7 @@ import { useAppTheme } from '@/providers/theme-provider';
 import { useToast } from '@/providers/toast-provider';
 
 export default function AjustesScreen() {
-  const { isDark, mode, toggleTheme, colors } = useAppTheme();
+  const { colors } = useAppTheme();
   const { showToast } = useToast();
   const styles = createStyles(colors);
   const [testingPush, setTestingPush] = useState(false);
@@ -141,17 +141,6 @@ export default function AjustesScreen() {
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>Ajustes</Text>
-        <Text style={styles.subtitle}>Tema de la aplicacion</Text>
-
-        <View style={styles.row}>
-          <Text style={styles.label}>{mode === 'dark' ? 'Oscuro (actual)' : 'Claro'}</Text>
-          <Switch
-            value={!isDark}
-            onValueChange={toggleTheme}
-            thumbColor={colors.buttonText}
-            trackColor={{ false: colors.tabInactive, true: colors.buttonBg }}
-          />
-        </View>
 
         <Text style={styles.subtitle}>Notificaciones push</Text>
         <Pressable
@@ -227,20 +216,6 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
       color: colors.textSecondary,
       fontSize: 15,
       marginBottom: 10,
-    },
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: colors.inputBg,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-    },
-    label: {
-      color: colors.inputText,
-      fontSize: 16,
-      fontWeight: '600',
     },
     pushButton: {
       backgroundColor: colors.buttonBg,

@@ -122,6 +122,7 @@ export default function TrabajosEntregadosScreen() {
           <FlatList
             data={trabajos}
             keyExtractor={(item) => String(item.id)}
+            style={styles.list}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => (
               <TrabajoCustomCard
@@ -260,7 +261,8 @@ function createStyles(colors: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: colors.background,
-      padding: 20,
+      paddingHorizontal: 20,
+      paddingTop: 20,
     },
     stateCard: {
       backgroundColor: colors.card,
@@ -276,9 +278,12 @@ function createStyles(colors: ThemeColors) {
       textAlign: 'center',
       fontSize: 15,
     },
+    list: {
+      flex: 1,
+    },
     listContent: {
       gap: 12,
-      paddingBottom: 24,
+      paddingBottom: 120,
     },
     syncInfo: {
       color: colors.textSecondary,

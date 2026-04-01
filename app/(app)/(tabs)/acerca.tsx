@@ -55,7 +55,8 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
     container: {
       flex: 1,
       backgroundColor: colors.background,
-      padding: 20,
+      paddingHorizontal: 20,
+      paddingTop: 20,
       gap: 12,
     },
     card: {

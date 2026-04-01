@@ -1,11 +1,8 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   createContext,
   ReactNode,
   useContext,
-  useEffect,
   useMemo,
-  useState,
 } from "react";
 
 export type ThemeMode = "dark" | "light";
@@ -42,33 +39,6 @@ type ThemeContextValue = {
   toggleTheme: () => void;
 };
 
-const STORAGE_KEY = "app_theme_mode";
-
-const darkColors: ThemeColors = {
-  background: "#0B1F3A",
-  card: "#1F4EA8",
-  border: "#D8E7FF",
-  textPrimary: "#FFFFFF",
-  textSecondary: "#DCE8FF",
-  inputBg: "#EEF4FF",
-  inputText: "#0B1F3A",
-  inputPlaceholder: "#7C95C9",
-  buttonBg: "#0B1F3A",
-  buttonText: "#FFFFFF",
-  badgeBg: "#D8E7FF",
-  badgeText: "#0B1F3A",
-  headerBg: "#0B1F3A",
-  headerText: "#FFFFFF",
-  drawerBg: "#13315E",
-  drawerActiveBg: "#D8E7FF",
-  drawerActiveText: "#0B1F3A",
-  drawerInactiveText: "#D8E7FF",
-  tabBg: "#13315E",
-  tabBorder: "#244A85",
-  tabActive: "#FFFFFF",
-  tabInactive: "#A9C1E7",
-};
-
 const lightColors: ThemeColors = {
   background: "#F3F7FF",
   card: "#FFFFFF",
@@ -101,43 +71,19 @@ type AppThemeProviderProps = {
 };
 
 export function AppThemeProvider({ children }: AppThemeProviderProps) {
-  const [mode, setMode] = useState<ThemeMode>("light");
-
-  useEffect(() => {
-    let mounted = true;
-
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((saved) => {
-        if (!mounted || (saved !== "dark" && saved !== "light")) {
-          return;
-        }
-        setMode(saved);
-      })
-      .catch((error) => {
-        console.warn("No se pudo leer el tema guardado.", error);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
+  const mode: ThemeMode = "light";
   const toggleTheme = () => {
-    const nextMode: ThemeMode = mode === "dark" ? "light" : "dark";
-    setMode(nextMode);
-    AsyncStorage.setItem(STORAGE_KEY, nextMode).catch((error) => {
-      console.warn("No se pudo guardar el tema.", error);
-    });
+    // Tema fijo en claro por requerimiento de producto.
   };
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       mode,
-      isDark: mode === "dark",
-      colors: mode === "dark" ? darkColors : lightColors,
+      isDark: false,
+      colors: lightColors,
       toggleTheme,
     }),
-    [mode],
+    [],
   );
 
   return (

@@ -225,6 +225,7 @@ export default function TrabajosScreen() {
           <FlatList
             data={filteredTrabajos}
             keyExtractor={(item) => String(item.id)}
+            style={styles.list}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => {
               const entregaAlertType = getTrabajoEntregaAlertType(item);
@@ -383,7 +384,8 @@ function createStyles(colors: ThemeColors) {
     container: {
       flex: 1,
       backgroundColor: colors.background,
-      padding: 20,
+      paddingHorizontal: 20,
+      paddingTop: 20,
     },
     toolsRow: {
       minHeight: 30,
@@ -437,6 +439,9 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       textAlign: "center",
       fontSize: 15,
+    },
+    list: {
+      flex: 1,
     },
     listContent: {
       gap: 12,
