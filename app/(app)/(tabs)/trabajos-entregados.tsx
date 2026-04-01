@@ -1,8 +1,9 @@
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 
+import { QuestionSearch } from '@/components/question-search';
 import { TrabajoCustomCard } from '@/components/ui/custom-card';
 import { supabase } from '@/lib/supabase';
 import { CachedTrabajo, getCachedTrabajos, getLastSyncAt, replaceCachedTrabajos } from '@/lib/trabajos-cache';
@@ -35,6 +36,33 @@ export default function TrabajosEntregadosScreen() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [syncInfo, setSyncInfo] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [searchBarWidth, setSearchBarWidth] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const filteredTrabajos = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+    if (!query) {
+      return trabajos;
+    }
+
+    return trabajos.filter((item) =>
+      [item.nombreTrabajo, item.autor, item.especialidad, item.tipoTrabajo, item.estado]
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [searchText, trabajos]);
+
+  const handleToolsLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const width = Math.floor(event.nativeEvent.layout.width);
+      if (width > 0 && width !== searchBarWidth) {
+        setSearchBarWidth(width);
+      }
+    },
+    [searchBarWidth]
+  );
 
   const loadTrabajosEntregados = useCallback(async () => {
     setLoading(true);
@@ -103,6 +131,22 @@ export default function TrabajosEntregadosScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.toolsRow} onLayout={handleToolsLayout}>
+        {!searchOpen && syncInfo ? <Text style={styles.syncInfo}>{syncInfo}</Text> : null}
+        <View style={styles.searchWrap}>
+          <QuestionSearch
+            value={searchText}
+            onChangeText={setSearchText}
+            onOpenChange={setSearchOpen}
+            placeholder='Buscar trabajo, autor o tipo'
+            inHeader
+            expandedWidth={searchBarWidth > 0 ? searchBarWidth : undefined}
+            collapsedSize={34}
+            iconSize={18}
+          />
+        </View>
+      </View>
+
       {loading ? (
         <View style={styles.stateCard}>
           <ActivityIndicator color={colors.buttonBg} />
@@ -116,11 +160,14 @@ export default function TrabajosEntregadosScreen() {
         <View style={styles.stateCard}>
           <Text style={styles.stateText}>No hay trabajos entregados todavia.</Text>
         </View>
+      ) : filteredTrabajos.length === 0 ? (
+        <View style={styles.stateCard}>
+          <Text style={styles.stateText}>No hay coincidencias para tu busqueda.</Text>
+        </View>
       ) : (
         <>
-          {syncInfo ? <Text style={styles.syncInfo}>{syncInfo}</Text> : null}
           <FlatList
-            data={trabajos}
+            data={filteredTrabajos}
             keyExtractor={(item) => String(item.id)}
             style={styles.list}
             contentContainerStyle={styles.listContent}
@@ -264,6 +311,16 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: 20,
       paddingTop: 20,
     },
+    toolsRow: {
+      minHeight: 30,
+      justifyContent: 'center',
+      marginBottom: 10,
+    },
+    searchWrap: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+    },
     stateCard: {
       backgroundColor: colors.card,
       borderColor: colors.border,
@@ -288,8 +345,8 @@ function createStyles(colors: ThemeColors) {
     syncInfo: {
       color: colors.textSecondary,
       fontSize: 12,
-      marginBottom: 10,
       paddingHorizontal: 2,
+      paddingRight: 38,
     },
   });
 }

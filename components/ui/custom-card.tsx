@@ -508,7 +508,11 @@ function getTiempoEstadoTexto(input: {
   const diffDays = getDaysBetween(now, entregaAt);
 
   if (diffDays < 0) {
-    return "Pasado de fecha";
+    const overdueDays = Math.abs(diffDays);
+    if (overdueDays === 1) {
+      return "Pasado de fecha (1 dia)";
+    }
+    return `Pasado de fecha (${overdueDays} dias)`;
   }
   if (diffDays === 0) {
     return "Entrega hoy";

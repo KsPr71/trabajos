@@ -1,9 +1,13 @@
+import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from "react-native";
@@ -44,6 +48,31 @@ type DashboardPayload = {
   entregasPorMes: EntregasMesGroup[];
 };
 
+type DashboardRangeFilter =
+  | "este_anio"
+  | "este_mes"
+  | "ultimos_3_meses"
+  | "ultimos_6_meses";
+type DashboardRangeMode = "preset" | "manual";
+
+type DashboardRow = {
+  nombre_trabajo: string;
+  fecha_entrega: string | null;
+  estado: string | null;
+  precio_aplicado: number | null;
+  tipo_trabajo: unknown;
+};
+
+const DASHBOARD_FILTER_OPTIONS: {
+  key: DashboardRangeFilter;
+  label: string;
+}[] = [
+  { key: "este_anio", label: "Este año" },
+  { key: "este_mes", label: "Este mes" },
+  { key: "ultimos_3_meses", label: "3 meses" },
+  { key: "ultimos_6_meses", label: "6 meses" },
+];
+
 const ESTADO_ORDER: EstadoTrabajo[] = [
   "creado",
   "en_proceso",
@@ -61,40 +90,75 @@ const ESTADO_META: Record<EstadoTrabajo, { label: string; color: string }> = {
 export default function DashboardScreen() {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
-  const [resumenPorTipo, setResumenPorTipo] = useState<ResumenTipoEstado[]>([]);
-  const [ganancias, setGanancias] = useState<GananciasResumen>({
-    esperadas: 0,
-    recibidas: 0,
-    total: 0,
+  const [dashboardRows, setDashboardRows] = useState<DashboardRow[]>([]);
+  const [timeFilter, setTimeFilter] =
+    useState<DashboardRangeFilter>("este_anio");
+  const [rangeMode, setRangeMode] = useState<DashboardRangeMode>("preset");
+  const [rangeAccordionOpen, setRangeAccordionOpen] = useState(false);
+  const [manualFromDate, setManualFromDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [gananciasPorMes, setGananciasPorMes] = useState<GananciaMensualItem[]>(
-    [],
+  const [manualToDate, setManualToDate] = useState(() =>
+    startOfDay(new Date()),
   );
-  const [entregasPorMes, setEntregasPorMes] = useState<EntregasMesGroup[]>([]);
+  const [showFromDatePicker, setShowFromDatePicker] = useState(false);
+  const [showToDatePicker, setShowToDatePicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [syncInfo, setSyncInfo] = useState<string | null>(null);
 
-  const applyDashboardPayload = useCallback((payload: DashboardPayload) => {
-    setResumenPorTipo(payload.resumenPorTipo);
-    setGanancias(payload.ganancias);
-    setGananciasPorMes(payload.gananciasPorMes);
-    setEntregasPorMes(payload.entregasPorMes);
-  }, []);
+  const selectedRange = useMemo(
+    () =>
+      rangeMode === "manual"
+        ? getManualRangeWindow(manualFromDate, manualToDate)
+        : getDashboardRangeWindow(timeFilter),
+    [manualFromDate, manualToDate, rangeMode, timeFilter],
+  );
+  const selectedPresetLabel = useMemo(
+    () =>
+      DASHBOARD_FILTER_OPTIONS.find((option) => option.key === timeFilter)
+        ?.label ?? "Este año",
+    [timeFilter],
+  );
+  const isManualMode = rangeMode === "manual";
+
+  const filteredRows = useMemo(
+    () =>
+      filterDashboardRowsByWindow(
+        dashboardRows,
+        selectedRange.start,
+        selectedRange.endExclusive,
+      ),
+    [dashboardRows, selectedRange.endExclusive, selectedRange.start],
+  );
+
+  const filteredDashboardPayload = useMemo(
+    () => buildDashboardPayloadFromRows(filteredRows),
+    [filteredRows],
+  );
+
+  const entregasPorMes = useMemo(
+    () => buildEntregasPorMes(dashboardRows),
+    [dashboardRows],
+  );
+
+  const { resumenPorTipo, ganancias, gananciasPorMes } =
+    filteredDashboardPayload;
 
   const loadResumen = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
     setSyncInfo(null);
 
-    let hasLocalSnapshot = false;
+    let hasLocalRows = false;
     try {
       const cachedSnapshot = await getCachedDashboardSnapshot();
-      const cachedPayload = normalizeDashboardPayload(cachedSnapshot?.payload);
+      const cachedRows = normalizeDashboardRows(cachedSnapshot?.payload);
 
-      if (cachedSnapshot && cachedPayload) {
-        applyDashboardPayload(cachedPayload);
-        hasLocalSnapshot = true;
+      if (cachedSnapshot && cachedRows.length > 0) {
+        setDashboardRows(cachedRows);
+        hasLocalRows = true;
         setLoading(false);
         setSyncInfo(
           `Mostrando cache local. Ultima sincronizacion: ${formatDateTime(cachedSnapshot.updatedAt)}`,
@@ -104,10 +168,10 @@ export default function DashboardScreen() {
       console.warn("No se pudo leer cache local del dashboard.", cacheError);
     }
 
-    const remoteResult = await fetchDashboardPayloadFromSupabase();
+    const remoteResult = await fetchDashboardRowsFromSupabase();
 
-    if (!remoteResult.payload) {
-      if (!hasLocalSnapshot) {
+    if (!remoteResult.rows) {
+      if (!hasLocalRows) {
         setErrorMessage(
           remoteResult.errorMessage ?? "No se pudo cargar el dashboard.",
         );
@@ -118,7 +182,7 @@ export default function DashboardScreen() {
       return;
     }
 
-    applyDashboardPayload(remoteResult.payload);
+    setDashboardRows(remoteResult.rows);
     setErrorMessage(null);
     setLoading(false);
     setSyncInfo(
@@ -126,14 +190,14 @@ export default function DashboardScreen() {
     );
 
     try {
-      await replaceCachedDashboardSnapshot(remoteResult.payload);
+      await replaceCachedDashboardSnapshot({ rows: remoteResult.rows });
     } catch (cacheError) {
       console.warn(
         "No se pudo actualizar cache local del dashboard.",
         cacheError,
       );
     }
-  }, [applyDashboardPayload]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -147,6 +211,158 @@ export default function DashboardScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {syncInfo ? <Text style={styles.syncInfo}>{syncInfo}</Text> : null}
+      <View style={styles.rangeAccordion}>
+        <Pressable
+          onPress={() => setRangeAccordionOpen((prev) => !prev)}
+          style={styles.rangeAccordionHeader}
+        >
+          <Text style={styles.rangeAccordionTitle}>
+            {`Rango (${rangeMode === "manual" ? "Manual" : selectedPresetLabel}) - ${formatDateOnly(selectedRange.start)} - ${formatDateOnly(selectedRange.endInclusive)}`}
+          </Text>
+          <Ionicons
+            name={rangeAccordionOpen ? "chevron-up" : "chevron-down"}
+            size={16}
+            color={colors.textPrimary}
+          />
+        </Pressable>
+
+        {rangeAccordionOpen ? (
+          <View style={styles.rangeAccordionBody}>
+            {!isManualMode ? (
+              <View style={styles.presetControlsRow}>
+                <View
+                  style={[styles.modeToggleRow, styles.modeToggleRowCompact]}
+                >
+                  <Text style={styles.modeToggleLabel}>Modo</Text>
+                  <Text style={styles.modeToggleValue}>Rapido</Text>
+                  <Switch
+                    value={isManualMode}
+                    onValueChange={(nextValue) =>
+                      setRangeMode(nextValue ? "manual" : "preset")
+                    }
+                    trackColor={{
+                      false: colors.border,
+                      true: colors.buttonBg,
+                    }}
+                    thumbColor={colors.buttonText}
+                    style={styles.modeToggleSwitch}
+                  />
+                </View>
+
+                <View style={styles.categoryColumn}>
+                  {DASHBOARD_FILTER_OPTIONS.map((option) => {
+                    const selected = timeFilter === option.key;
+                    return (
+                      <Pressable
+                        key={option.key}
+                        onPress={() => {
+                          setRangeMode("preset");
+                          setTimeFilter(option.key);
+                        }}
+                        style={[
+                          styles.categoryChip,
+                          styles.categoryChipStacked,
+                          selected ? styles.categoryChipActive : null,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryChipText,
+                            selected ? styles.categoryChipTextActive : null,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            {isManualMode ? (
+              <>
+                <View style={styles.filterWrap}>
+                  <View style={styles.modeToggleRow}>
+                    <Text style={styles.modeToggleLabel}>Modo</Text>
+                    <Text style={styles.modeToggleValue}>Manual</Text>
+                    <Switch
+                      value={isManualMode}
+                      onValueChange={(nextValue) =>
+                        setRangeMode(nextValue ? "manual" : "preset")
+                      }
+                      trackColor={{
+                        false: colors.border,
+                        true: colors.buttonBg,
+                      }}
+                      thumbColor={colors.buttonText}
+                      style={styles.modeToggleSwitch}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.manualInputsRow}>
+                  <Pressable
+                    onPress={() => {
+                      setRangeMode("manual");
+                      setShowFromDatePicker(true);
+                    }}
+                    style={styles.dateInput}
+                  >
+                    <Text style={styles.dateInputLabel}>Desde (manual)</Text>
+                    <Text style={styles.dateInputValue}>
+                      {formatDateOnly(manualFromDate)}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      setRangeMode("manual");
+                      setShowToDatePicker(true);
+                    }}
+                    style={styles.dateInput}
+                  >
+                    <Text style={styles.dateInputLabel}>Hasta (manual)</Text>
+                    <Text style={styles.dateInputValue}>
+                      {formatDateOnly(manualToDate)}
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+
+      {showFromDatePicker ? (
+        <DateTimePicker
+          value={manualFromDate}
+          mode="date"
+          display="default"
+          onChange={(_, nextDate) => {
+            setShowFromDatePicker(false);
+            if (nextDate) {
+              setRangeMode("manual");
+              setManualFromDate(startOfDay(nextDate));
+            }
+          }}
+        />
+      ) : null}
+
+      {showToDatePicker ? (
+        <DateTimePicker
+          value={manualToDate}
+          mode="date"
+          display="default"
+          onChange={(_, nextDate) => {
+            setShowToDatePicker(false);
+            if (nextDate) {
+              setRangeMode("manual");
+              setManualToDate(startOfDay(nextDate));
+            }
+          }}
+        />
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Trabajos por tipo y estado</Text>
@@ -285,37 +501,126 @@ export default function DashboardScreen() {
   );
 }
 
-async function fetchDashboardPayloadFromSupabase(): Promise<{
-  payload: DashboardPayload | null;
+async function fetchDashboardRowsFromSupabase(): Promise<{
+  rows: DashboardRow[] | null;
   errorMessage: string | null;
 }> {
-  const rpcResponse = await supabase.rpc("fn_dashboard_resumen");
-  if (!rpcResponse.error) {
-    const normalized = normalizeDashboardPayload(rpcResponse.data);
-    if (normalized) {
-      return { payload: normalized, errorMessage: null };
-    }
-  }
-
-  const fallbackResponse = await supabase
+  const response = await supabase
     .from("trabajos")
     .select(
       "nombre_trabajo,fecha_entrega,estado,precio_aplicado,tipo_trabajo:tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,precio)",
     );
 
-  if (fallbackResponse.error) {
+  if (response.error) {
     return {
-      payload: null,
-      errorMessage:
-        rpcResponse.error?.message ??
-        fallbackResponse.error.message ??
-        "No se pudo cargar el dashboard.",
+      rows: null,
+      errorMessage: response.error.message ?? "No se pudo cargar el dashboard.",
     };
   }
 
   return {
-    payload: buildDashboardPayloadFromRows(fallbackResponse.data),
+    rows: normalizeDashboardRows(response.data),
     errorMessage: null,
+  };
+}
+
+function normalizeDashboardRows(value: unknown): DashboardRow[] {
+  const list = extractRowsPayload(value);
+  if (!Array.isArray(list)) {
+    return [];
+  }
+
+  return list.map((row) => {
+    const record = row as Record<string, unknown>;
+    return {
+      nombre_trabajo: String(record.nombre_trabajo ?? ""),
+      fecha_entrega:
+        typeof record.fecha_entrega === "string" ? record.fecha_entrega : null,
+      estado: typeof record.estado === "string" ? record.estado : null,
+      precio_aplicado: parsePrecioNullable(record.precio_aplicado),
+      tipo_trabajo: record.tipo_trabajo ?? null,
+    };
+  });
+}
+
+function extractRowsPayload(value: unknown): unknown[] | null {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const rows = (value as { rows?: unknown }).rows;
+  return Array.isArray(rows) ? rows : null;
+}
+
+function filterDashboardRowsByWindow(
+  rows: DashboardRow[],
+  start: Date,
+  endExclusive: Date,
+) {
+  return rows.filter((row) => {
+    if (!row.fecha_entrega) {
+      return false;
+    }
+    const entregaDate = parseDateISO(row.fecha_entrega);
+    if (!entregaDate) {
+      return false;
+    }
+    return entregaDate >= start && entregaDate < endExclusive;
+  });
+}
+
+function getDashboardRangeWindow(rangeFilter: DashboardRangeFilter) {
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  if (rangeFilter === "este_mes") {
+    const endExclusive = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return {
+      start: currentMonthStart,
+      endInclusive: addDays(endExclusive, -1),
+      endExclusive,
+    };
+  }
+
+  if (rangeFilter === "ultimos_3_meses") {
+    const endExclusive = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return {
+      start: new Date(now.getFullYear(), now.getMonth() - 2, 1),
+      endInclusive: addDays(endExclusive, -1),
+      endExclusive,
+    };
+  }
+
+  if (rangeFilter === "ultimos_6_meses") {
+    const endExclusive = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return {
+      start: new Date(now.getFullYear(), now.getMonth() - 5, 1),
+      endInclusive: addDays(endExclusive, -1),
+      endExclusive,
+    };
+  }
+
+  const endExclusive = new Date(now.getFullYear() + 1, 0, 1);
+  return {
+    start: new Date(now.getFullYear(), 0, 1),
+    endInclusive: addDays(endExclusive, -1),
+    endExclusive,
+  };
+}
+
+function getManualRangeWindow(fromDate: Date, toDate: Date) {
+  const normalizedFrom = startOfDay(fromDate);
+  const normalizedTo = startOfDay(toDate);
+  const start = normalizedFrom <= normalizedTo ? normalizedFrom : normalizedTo;
+  const endInclusive =
+    normalizedFrom <= normalizedTo ? normalizedTo : normalizedFrom;
+
+  return {
+    start,
+    endInclusive,
+    endExclusive: addDays(endInclusive, 1),
   };
 }
 
@@ -326,192 +631,6 @@ function buildDashboardPayloadFromRows(rows: unknown): DashboardPayload {
     gananciasPorMes: buildGananciasPorMes(rows),
     entregasPorMes: buildEntregasPorMes(rows),
   };
-}
-
-function normalizeDashboardPayload(
-  rawPayload: unknown,
-): DashboardPayload | null {
-  if (!rawPayload || typeof rawPayload !== "object") {
-    return null;
-  }
-
-  const record = rawPayload as Record<string, unknown>;
-  const resumenPorTipo = normalizeResumenPorTipo(
-    record.resumen_por_tipo ?? record.resumenPorTipo,
-  );
-  const ganancias = normalizeGanancias(record.ganancias);
-  const gananciasPorMes = normalizeGananciasPorMes(
-    record.ganancias_por_mes ?? record.gananciasPorMes,
-  );
-  const entregasPorMes = normalizeEntregasPorMes(
-    record.entregas_por_mes ?? record.entregasPorMes,
-  );
-
-  return {
-    resumenPorTipo,
-    ganancias,
-    gananciasPorMes,
-    entregasPorMes,
-  };
-}
-
-function normalizeResumenPorTipo(value: unknown): ResumenTipoEstado[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-
-      const row = item as Record<string, unknown>;
-      const estadoCountsRaw = (row.estado_counts ??
-        row.estadoCounts ??
-        {}) as Record<string, unknown>;
-
-      const tipoTrabajo = String(
-        row.tipo_trabajo ?? row.tipoTrabajo ?? "Sin tipo",
-      );
-
-      const estadoCounts: Record<EstadoTrabajo, number> = {
-        creado: toNumber(estadoCountsRaw.creado),
-        en_proceso: toNumber(estadoCountsRaw.en_proceso),
-        terminado: toNumber(estadoCountsRaw.terminado),
-        entregado: toNumber(estadoCountsRaw.entregado),
-      };
-
-      return {
-        tipoTrabajo,
-        total: toNumber(row.total),
-        estadoCounts,
-      };
-    })
-    .filter((item): item is ResumenTipoEstado => Boolean(item))
-    .sort((a, b) => {
-      if (b.total !== a.total) {
-        return b.total - a.total;
-      }
-      return a.tipoTrabajo.localeCompare(b.tipoTrabajo);
-    });
-}
-
-function normalizeGanancias(value: unknown): GananciasResumen {
-  if (!value || typeof value !== "object") {
-    return { esperadas: 0, recibidas: 0, total: 0 };
-  }
-
-  const row = value as Record<string, unknown>;
-  const esperadas = toNumber(row.esperadas);
-  const recibidas = toNumber(row.recibidas);
-  const totalFromPayload = toNumber(row.total);
-  const total = totalFromPayload > 0 ? totalFromPayload : esperadas + recibidas;
-
-  return {
-    esperadas,
-    recibidas,
-    total,
-  };
-}
-
-function normalizeGananciasPorMes(value: unknown): GananciaMensualItem[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-
-      const row = item as Record<string, unknown>;
-      const esperadas = toNumber(row.esperadas);
-      const recibidas = toNumber(row.recibidas);
-      const totalFromPayload = toNumber(row.total);
-
-      return {
-        key: String(row.key ?? ""),
-        mesLabel: String(row.mes_label ?? row.mesLabel ?? ""),
-        esperadas,
-        recibidas,
-        total: totalFromPayload > 0 ? totalFromPayload : esperadas + recibidas,
-      };
-    })
-    .filter((item): item is GananciaMensualItem =>
-      Boolean(item && item.key.length > 0 && item.mesLabel.length > 0),
-    )
-    .sort((a, b) => a.key.localeCompare(b.key));
-}
-
-function normalizeEntregasPorMes(value: unknown): EntregasMesGroup[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-
-      const row = item as Record<string, unknown>;
-      const trabajos = Array.isArray(row.trabajos)
-        ? row.trabajos
-            .map((trabajo) => {
-              if (trabajo && typeof trabajo === "object") {
-                const record = trabajo as Record<string, unknown>;
-                const nombre = String(
-                  record.nombre ?? record.trabajo ?? "",
-                ).trim();
-                const estadoTexto = String(
-                  record.estado_texto ?? record.estadoTexto ?? "",
-                ).trim();
-                if (!nombre) {
-                  return null;
-                }
-                return {
-                  nombre,
-                  estadoTexto: estadoTexto || "Pendiente a terminacion",
-                };
-              }
-
-              const nombre = String(trabajo ?? "").trim();
-              if (!nombre) {
-                return null;
-              }
-              return {
-                nombre,
-                estadoTexto: "Pendiente a terminacion",
-              };
-            })
-            .filter(
-              (
-                trabajo,
-              ): trabajo is { nombre: string; estadoTexto: string } =>
-                Boolean(trabajo && trabajo.nombre.length > 0),
-            )
-        : [];
-
-      return {
-        key: String(row.key ?? ""),
-        mesLabel: String(row.mes_label ?? row.mesLabel ?? ""),
-        trabajos,
-      };
-    })
-    .filter((item): item is EntregasMesGroup =>
-      Boolean(item && item.key.length > 0 && item.mesLabel.length > 0),
-    )
-    .sort((a, b) => a.key.localeCompare(b.key));
-}
-
-function toNumber(value: unknown) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return parsed;
 }
 
 function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
@@ -529,6 +648,124 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       fontSize: 12,
       paddingHorizontal: 2,
       marginBottom: -2,
+    },
+    rangeAccordion: {
+      backgroundColor: colors.card,
+      borderWidth: 2,
+      borderColor: colors.border,
+      borderRadius: 16,
+      overflow: "hidden",
+    },
+    rangeAccordionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      backgroundColor: colors.inputBg,
+    },
+    rangeAccordionTitle: {
+      color: colors.textPrimary,
+      fontSize: 14,
+      fontWeight: "800",
+      letterSpacing: 0.2,
+    },
+    rangeAccordionBody: {
+      padding: 12,
+      gap: 10,
+    },
+    filterWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    manualInputsRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    dateInput: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      backgroundColor: colors.inputBg,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      gap: 2,
+    },
+    dateInputLabel: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontWeight: "700",
+    },
+    dateInputValue: {
+      color: colors.textPrimary,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    modeToggleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      backgroundColor: colors.inputBg,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    modeToggleRowCompact: {
+      alignSelf: "flex-start",
+    },
+    presetControlsRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 10,
+    },
+    categoryColumn: {
+      flex: 1,
+      gap: 8,
+    },
+    modeToggleLabel: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    modeToggleValue: {
+      color: colors.textPrimary,
+      fontSize: 12,
+      fontWeight: "800",
+      marginRight: 2,
+    },
+    modeToggleSwitch: {
+      transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }],
+    },
+    categoryChip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      backgroundColor: colors.inputBg,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    categoryChipStacked: {
+      width: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: 34,
+    },
+    categoryChipActive: {
+      backgroundColor: colors.buttonBg,
+      borderColor: colors.buttonBg,
+    },
+    categoryChipText: {
+      color: colors.inputText,
+      fontSize: 12,
+      fontWeight: "700",
+      textAlign: "center",
+    },
+    categoryChipTextActive: {
+      color: colors.buttonText,
     },
     card: {
       backgroundColor: colors.card,
@@ -913,7 +1150,7 @@ function buildEntregasPorMes(rows: unknown): EntregasMesGroup[] {
     }
 
     const entregaDate = parseDateISO(String(typedRow.fecha_entrega));
-    if (!entregaDate || entregaDate < today) {
+    if (!entregaDate) {
       continue;
     }
 
@@ -942,9 +1179,7 @@ function buildEntregasPorMes(rows: unknown): EntregasMesGroup[] {
     .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
     .map(([, group]) => ({
       ...group,
-      trabajos: group.trabajos.sort((a, b) =>
-        a.nombre.localeCompare(b.nombre),
-      ),
+      trabajos: group.trabajos.sort((a, b) => a.nombre.localeCompare(b.nombre)),
     }));
 }
 
@@ -978,6 +1213,13 @@ function formatDateTime(isoDate: string) {
   return `${day}/${month}/${year} ${hour}:${minute}`;
 }
 
+function formatDateOnly(date: Date) {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 function parseDateISO(value: string) {
   const [year, month, day] = value.split("-").map((part) => Number(part));
   if (!year || !month || !day) {
@@ -988,6 +1230,12 @@ function parseDateISO(value: string) {
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addDays(date: Date, days: number) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return startOfDay(result);
 }
 
 function getDaysDiff(from: Date, to: Date) {
