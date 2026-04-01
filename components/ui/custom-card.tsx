@@ -175,8 +175,9 @@ function PaidCornerTriangle({
 }) {
   return (
     <View pointerEvents="none" style={styles.paidCornerWrap}>
-      <View style={styles.paidCornerTriangle} />
-      <Text style={styles.paidCornerText}>PAGADO</Text>
+      <View style={styles.paidCornerRibbon}>
+        <Text style={styles.paidCornerText}>PAGADO</Text>
+      </View>
     </View>
   );
 }
@@ -290,30 +291,27 @@ function createTrabajoStyles(colors: ThemeColors) {
       position: "absolute",
       top: 0,
       right: 0,
-      width: 88,
-      height: 88,
+      width: 104,
+      height: 104,
+      overflow: "hidden",
       zIndex: 20,
     },
-    paidCornerTriangle: {
+    paidCornerRibbon: {
       position: "absolute",
-      top: 0,
-      right: 0,
-      width: 0,
-      height: 0,
-      borderTopWidth: 88,
-      borderLeftWidth: 88,
-      borderTopColor: "rgba(36, 240, 111, 0.5)",
-      borderLeftColor: "transparent",
+      top: 20,
+      right: -56,
+      width: 180,
+      height: 28,
+      backgroundColor: "#22C55E",
+      alignItems: "center",
+      justifyContent: "center",
+      transform: [{ rotate: "45deg" }],
     },
     paidCornerText: {
-      position: "absolute",
-      top: 30,
-      right: 10,
-      fontSize: 10,
+      fontSize: 11,
       fontWeight: "800",
-      letterSpacing: 0.4,
-      color: "#14532D",
-      transform: [{ rotate: "45deg" }],
+      letterSpacing: 0.6,
+      color: "#FFFFFF",
     },
     titleContainer: {
       paddingHorizontal: 16,
