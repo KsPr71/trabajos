@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   FlatList,
   LayoutChangeEvent,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -259,13 +258,6 @@ export default function TrabajosScreen() {
         </>
       )}
 
-      <Pressable
-        accessibilityLabel="Crear nuevo trabajo"
-        onPress={() => router.push("/(app)/nuevo-trabajo")}
-        style={styles.fabWrap}
-      >
-        <Ionicons name="add" size={24} color={colors.buttonText} />
-      </Pressable>
     </View>
   );
 }
@@ -455,22 +447,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: 12,
       paddingHorizontal: 2,
       paddingRight: 38,
-    },
-    fabWrap: {
-      position: "absolute",
-      right: 20,
-      bottom: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 9999,
-      backgroundColor: colors.buttonBg,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.22,
-      shadowRadius: 8,
-      elevation: 5,
     },
   });
 }

@@ -126,7 +126,7 @@ export default function AppLayout() {
         drawerActiveTintColor: colors.drawerActiveText,
         drawerActiveBackgroundColor: colors.drawerActiveBg,
         drawerInactiveTintColor: colors.drawerInactiveText,
-        sceneStyle: { paddingBottom: 14 },
+        sceneStyle: { paddingBottom: 0 },
         title: drawerLabels[route.name] ?? route.name,
         drawerLabel: drawerLabels[route.name] ?? route.name,
         drawerIcon: ({ color, size }) => (

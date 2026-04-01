@@ -398,6 +398,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     },
     content: {
       padding: 20,
+      paddingBottom: 140,
     },
     card: {
       backgroundColor: colors.card,
