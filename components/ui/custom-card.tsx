@@ -54,6 +54,8 @@ export function TrabajoCustomCard({
     entregaAlertType ?? (showEntregaAlertChip ? "esta_semana" : null);
   const entregaAlertChip = getEntregaAlertChip(resolvedEntregaAlertType);
   const tiempoLabel = getTiempoLabel(estado);
+  const tabIconName =
+    estado === "entregado" ? "folder-outline" : "folder-open-outline";
 
   return (
     <Pressable
@@ -61,7 +63,15 @@ export function TrabajoCustomCard({
       style={[styles.card, accentBorder ? styles.cardWithAccent : null]}
     >
       <View style={styles.tab}>
-        <Text style={styles.tabText}>{tipoTrabajo}</Text>
+        <View style={styles.tabContent}>
+          <Ionicons
+            name={tabIconName}
+            size={14}
+            color={colors.textSecondary}
+            style={styles.tabIcon}
+          />
+          <Text style={styles.tabText}>{tipoTrabajo}</Text>
+        </View>
       </View>
 
       <View style={styles.cardBody}>
@@ -274,7 +284,14 @@ function createTrabajoStyles(colors: ThemeColors) {
       letterSpacing: 0.2,
       textTransform: "uppercase",
       paddingRight: 50,
+    },
+    tabContent: {
+      flexDirection: "row",
+      alignItems: "center",
       paddingLeft: 10,
+    },
+    tabIcon: {
+      marginRight: 6,
     },
     cardBody: {
       backgroundColor: colors.card,
