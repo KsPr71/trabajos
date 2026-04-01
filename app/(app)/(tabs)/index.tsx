@@ -459,8 +459,39 @@ function normalizeEntregasPorMes(value: unknown): EntregasMesGroup[] {
       const row = item as Record<string, unknown>;
       const trabajos = Array.isArray(row.trabajos)
         ? row.trabajos
-            .map((trabajo) => String(trabajo))
-            .filter((trabajo) => trabajo.length > 0)
+            .map((trabajo) => {
+              if (trabajo && typeof trabajo === "object") {
+                const record = trabajo as Record<string, unknown>;
+                const nombre = String(
+                  record.nombre ?? record.trabajo ?? "",
+                ).trim();
+                const estadoTexto = String(
+                  record.estado_texto ?? record.estadoTexto ?? "",
+                ).trim();
+                if (!nombre) {
+                  return null;
+                }
+                return {
+                  nombre,
+                  estadoTexto: estadoTexto || "Pendiente a terminacion",
+                };
+              }
+
+              const nombre = String(trabajo ?? "").trim();
+              if (!nombre) {
+                return null;
+              }
+              return {
+                nombre,
+                estadoTexto: "Pendiente a terminacion",
+              };
+            })
+            .filter(
+              (
+                trabajo,
+              ): trabajo is { nombre: string; estadoTexto: string } =>
+                Boolean(trabajo && trabajo.nombre.length > 0),
+            )
         : [];
 
       return {
@@ -893,13 +924,17 @@ function buildEntregasPorMes(rows: unknown): EntregasMesGroup[] {
     const nombreTrabajo = String(
       typedRow.nombre_trabajo ?? "Trabajo sin nombre",
     );
+    const estadoTexto = getTrabajoPendienteTexto(estado, entregaDate, today);
 
     const current = grouped.get(key) ?? {
       key,
       mesLabel: label,
       trabajos: [],
     };
-    current.trabajos.push(nombreTrabajo);
+    current.trabajos.push({
+      nombre: nombreTrabajo,
+      estadoTexto,
+    });
     grouped.set(key, current);
   }
 
@@ -907,8 +942,27 @@ function buildEntregasPorMes(rows: unknown): EntregasMesGroup[] {
     .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
     .map(([, group]) => ({
       ...group,
-      trabajos: group.trabajos.sort((a, b) => a.localeCompare(b)),
+      trabajos: group.trabajos.sort((a, b) =>
+        a.nombre.localeCompare(b.nombre),
+      ),
     }));
+}
+
+function getTrabajoPendienteTexto(
+  estado: EstadoTrabajo,
+  fechaEntrega: Date,
+  today: Date,
+) {
+  const atrasoDias = getDaysDiff(startOfDay(fechaEntrega), startOfDay(today));
+  if (atrasoDias > 0) {
+    return `Atrasado ${atrasoDias} dias`;
+  }
+
+  if (estado === "terminado") {
+    return "Pendiente a entrega";
+  }
+
+  return "Pendiente a terminacion";
 }
 
 function formatDateTime(isoDate: string) {
@@ -934,6 +988,11 @@ function parseDateISO(value: string) {
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getDaysDiff(from: Date, to: Date) {
+  const diffMs = to.getTime() - from.getTime();
+  return Math.floor(diffMs / 86400000);
 }
 
 const MONTH_NAMES_ES = [

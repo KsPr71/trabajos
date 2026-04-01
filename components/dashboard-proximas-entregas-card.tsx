@@ -5,7 +5,10 @@ import { useAppTheme } from "@/providers/theme-provider";
 export type EntregasMesGroup = {
   key: string;
   mesLabel: string;
-  trabajos: string[];
+  trabajos: {
+    nombre: string;
+    estadoTexto: string;
+  }[];
 };
 
 type DashboardProximasEntregasCardProps = {
@@ -26,7 +29,7 @@ export function DashboardProximasEntregasCard({
     <View style={styles.card}>
       <Text style={styles.sectionTitle}>Proximas entregas</Text>
       <Text style={styles.sectionSubtitle}>
-        Trabajos pendientes agrupados por mes de entrega.
+        Trabajos no entregados agrupados por mes de entrega.
       </Text>
 
       {loading ? (
@@ -40,7 +43,7 @@ export function DashboardProximasEntregasCard({
         </View>
       ) : groups.length === 0 ? (
         <View style={styles.stateBox}>
-          <Text style={styles.stateText}>No hay entregas pendientes en los proximos meses.</Text>
+          <Text style={styles.stateText}>No hay trabajos pendientes de entrega.</Text>
         </View>
       ) : (
         <View style={styles.groupsWrap}>
@@ -49,9 +52,13 @@ export function DashboardProximasEntregasCard({
               <Text style={styles.groupTitle}>{group.mesLabel}</Text>
               <View style={styles.workList}>
                 {group.trabajos.map((trabajo, index) => (
-                  <Text key={`${group.key}-${index}-${trabajo}`} style={styles.workItem}>
-                    - {trabajo}
-                  </Text>
+                  <View
+                    key={`${group.key}-${index}-${trabajo.nombre}`}
+                    style={styles.workItemRow}
+                  >
+                    <Text style={styles.workItem}>- {trabajo.nombre}</Text>
+                    <Text style={styles.workItemMeta}>{trabajo.estadoTexto}</Text>
+                  </View>
                 ))}
               </View>
             </View>
@@ -115,10 +122,20 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
     workList: {
       gap: 4,
     },
+    workItemRow: {
+      gap: 2,
+    },
     workItem: {
       color: colors.inputText,
       fontSize: 13,
       lineHeight: 18,
+      fontWeight: "600",
+    },
+    workItemMeta: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      lineHeight: 16,
+      marginLeft: 10,
       fontWeight: "600",
     },
   });
