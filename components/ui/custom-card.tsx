@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { TrabajoCardEstado } from "@/components/trabajo-card";
 import { ThemeColors, useAppTheme } from "@/providers/theme-provider";
@@ -11,6 +11,7 @@ type TrabajoCustomCardProps = {
   especialidad: string;
   tipoTrabajo: string;
   tipoTrabajoColor?: string | null;
+  enlaceDescargaMega?: string | null;
   fechaEntrega: string | null;
   estadoCreadoAt?: string | null;
   estadoEnProcesoAt?: string | null;
@@ -29,6 +30,7 @@ export function TrabajoCustomCard({
   especialidad,
   tipoTrabajo,
   tipoTrabajoColor = null,
+  enlaceDescargaMega = null,
   fechaEntrega,
   estadoCreadoAt = null,
   estadoEnProcesoAt = null,
@@ -56,6 +58,27 @@ export function TrabajoCustomCard({
   const tiempoLabel = getTiempoLabel(estado);
   const tabIconName =
     estado === "entregado" ? "folder-outline" : "folder-open-outline";
+  const showMegaDownloadButton =
+    Boolean(enlaceDescargaMega?.trim()) &&
+    (estado === "terminado" || estado === "entregado");
+
+  const handleMegaDownloadPress = async () => {
+    const normalizedLink = normalizeExternalUrl(enlaceDescargaMega);
+    if (!normalizedLink) {
+      return;
+    }
+
+    try {
+      const canOpen = await Linking.canOpenURL(normalizedLink);
+      if (!canOpen) {
+        Alert.alert("Enlace no disponible", "No se pudo abrir el enlace de MEGA.");
+        return;
+      }
+      await Linking.openURL(normalizedLink);
+    } catch {
+      Alert.alert("Error", "No se pudo abrir el enlace de descarga.");
+    }
+  };
 
   return (
     <Pressable
@@ -124,51 +147,75 @@ export function TrabajoCustomCard({
             </View>
 
             <View style={[styles.chipsRow]}>
-              {entregaAlertChip ? (
+              {showMegaDownloadButton ? (
+                <Pressable
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    void handleMegaDownloadPress();
+                  }}
+                  style={styles.megaButton}
+                >
+                  <View style={styles.megaLogoBadge}>
+                    <Text style={styles.megaLogoText}>M</Text>
+                  </View>
+                  <Text style={styles.megaButtonText}>MEGA</Text>
+                  <Ionicons name="download-outline" size={14} color="#FFFFFF" />
+                </Pressable>
+              ) : null}
+
+              <View style={styles.rightChipsRow}>
+                {entregaAlertChip ? (
+                  <View
+                    style={[
+                      styles.entregaChip,
+                      { backgroundColor: entregaAlertChip.backgroundColor },
+                    ]}
+                  >
+                    <Ionicons
+                      name="alert-circle-outline"
+                      size={14}
+                      color={entregaAlertChip.textColor}
+                    />
+                    <Text
+                      style={[
+                        styles.entregaChipText,
+                        { color: entregaAlertChip.textColor },
+                      ]}
+                    >
+                      {entregaAlertChip.label}
+                    </Text>
+                  </View>
+                ) : null}
+
                 <View
                   style={[
-                    styles.entregaChip,
-                    { backgroundColor: entregaAlertChip.backgroundColor },
+                    styles.tipoChip,
+                    { backgroundColor: tipoChipBg, borderColor: tipoChipBg },
                   ]}
                 >
                   <Ionicons
-                    name="alert-circle-outline"
-                    size={14}
-                    color={entregaAlertChip.textColor}
+                    name="pricetag-outline"
+                    size={13}
+                    color={tipoChipTextColor}
                   />
                   <Text
-                    style={[
-                      styles.entregaChipText,
-                      { color: entregaAlertChip.textColor },
-                    ]}
+                    style={[styles.tipoChipText, { color: tipoChipTextColor }]}
                   >
-                    {entregaAlertChip.label}
+                    {tipoTrabajo}
                   </Text>
                 </View>
-              ) : null}
 
-              <View
-                style={[
-                  styles.tipoChip,
-                  { backgroundColor: tipoChipBg, borderColor: tipoChipBg },
-                ]}
-              >
-                <Text
-                  style={[styles.tipoChipText, { color: tipoChipTextColor }]}
+                <View
+                  style={[
+                    styles.statusChip,
+                    { backgroundColor: chip.backgroundColor },
+                  ]}
                 >
-                  {tipoTrabajo}
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.statusChip,
-                  { backgroundColor: chip.backgroundColor },
-                ]}
-              >
-                <Text style={[styles.chipText, { color: chip.textColor }]}>
-                  {chip.label}
-                </Text>
+                  <Ionicons name={chip.iconName} size={13} color={chip.textColor} />
+                  <Text style={[styles.chipText, { color: chip.textColor }]}>
+                    {chip.label}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -353,15 +400,51 @@ function createTrabajoStyles(colors: ThemeColors) {
     chipsRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
-      alignSelf: "flex-end",
       marginTop: 8,
-      flexWrap: "wrap",
-      justifyContent: "flex-end",
-      //borderTopWidth: 1,
+      width: "100%",
       borderTopColor: colors.border,
       paddingVertical: 10,
-      borderTopLeftRadius: 50,
+      gap: 8,
+    },
+    rightChipsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginLeft: "auto",
+      flexWrap: "wrap",
+      justifyContent: "flex-end",
+    },
+    megaButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: "#D9272E",
+      borderRadius: 9999,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      minHeight: 26,
+      borderWidth: 1,
+      borderColor: "#A81D24",
+    },
+    megaLogoBadge: {
+      width: 18,
+      height: 18,
+      borderRadius: 999,
+      backgroundColor: "#FFFFFF",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    megaLogoText: {
+      color: "#D9272E",
+      fontSize: 11,
+      fontWeight: "900",
+      marginTop: -1,
+    },
+    megaButtonText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0.3,
     },
     entregaChip: {
       flexDirection: "row",
@@ -369,7 +452,8 @@ function createTrabajoStyles(colors: ThemeColors) {
       gap: 4,
       borderRadius: 9999,
       paddingHorizontal: 10,
-      paddingVertical: 5,
+      paddingVertical: 4,
+      minHeight: 27,
       backgroundColor: "#DC2626",
     },
     entregaChipText: {
@@ -377,9 +461,13 @@ function createTrabajoStyles(colors: ThemeColors) {
       fontWeight: "700",
     },
     statusChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
       borderRadius: 9999,
       paddingHorizontal: 10,
-      paddingVertical: 5,
+      paddingVertical: 4,
+      minHeight: 27,
     },
     cardTitle: {
       fontSize: 18,
@@ -391,10 +479,14 @@ function createTrabajoStyles(colors: ThemeColors) {
     },
     tipoChip: {
       alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
       borderWidth: 1,
       borderRadius: 9999,
       paddingHorizontal: 10,
       paddingVertical: 4,
+      minHeight: 27,
     },
     tipoChipText: {
       fontSize: 12,
@@ -419,6 +511,7 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
       label: "Entregado",
       backgroundColor: "#1D4ED8",
       textColor: "#FFFFFF",
+      iconName: "checkmark-done-outline" as const,
     };
   }
   if (estado === "terminado") {
@@ -426,6 +519,7 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
       label: "Terminado",
       backgroundColor: "#22A06B",
       textColor: "#FFFFFF",
+      iconName: "checkmark-circle-outline" as const,
     };
   }
   if (estado === "en_proceso") {
@@ -433,12 +527,14 @@ function getEstadoChip(estado: TrabajoCardEstado, colors: ThemeColors) {
       label: "En proceso",
       backgroundColor: "#D946EF",
       textColor: "#FFFFFF",
+      iconName: "time-outline" as const,
     };
   }
   return {
     label: "Creado",
     backgroundColor: "#0EA5E9",
     textColor: colors.buttonText,
+    iconName: "add-circle-outline" as const,
   };
 }
 
@@ -630,6 +726,20 @@ function getReadableTextColor(hexColor: string) {
   const b = parseInt(clean.slice(4, 6), 16);
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
   return luminance > 150 ? "#10233F" : "#FFFFFF";
+}
+
+function normalizeExternalUrl(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
 }
 
 export default WindowsFolderCard;

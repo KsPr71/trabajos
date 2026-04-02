@@ -35,6 +35,7 @@ export default function NuevoTrabajoScreen() {
   const [clienteId, setClienteId] = useState<number | null>(null);
   const [especialidadId, setEspecialidadId] = useState<number | null>(null);
   const [institucionId, setInstitucionId] = useState<number | null>(null);
+  const [enlaceDescargaMega, setEnlaceDescargaMega] = useState('');
 
   const [fechaRecibido, setFechaRecibido] = useState<Date>(new Date());
   const [fechaEntrega, setFechaEntrega] = useState<Date | null>(null);
@@ -162,6 +163,7 @@ export default function NuevoTrabajoScreen() {
 
   const handleSubmit = async () => {
     const cleanNombre = nombreTrabajo.trim();
+    const cleanEnlaceDescargaMega = normalizeMegaLink(enlaceDescargaMega);
     const recibido = normalizeDate(fechaRecibido);
     const entrega = fechaEntrega ? normalizeDate(fechaEntrega) : null;
 
@@ -189,12 +191,13 @@ export default function NuevoTrabajoScreen() {
         cliente_id: clienteId,
         especialidad_id: especialidadId,
         institucion_id: institucionId,
+        enlace_descarga_mega: cleanEnlaceDescargaMega,
         fecha_recibido: formatDateISO(recibido),
         fecha_entrega: entrega ? formatDateISO(entrega) : null,
         estado: 'creado',
       })
       .select(
-        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
+        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,enlace_descarga_mega,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
       )
       .maybeSingle();
 
@@ -214,6 +217,9 @@ export default function NuevoTrabajoScreen() {
           clienteId: Number(data.cliente_id ?? clienteId),
           especialidadId: Number(data.especialidad_id ?? especialidadId),
           institucionId: data.institucion_id === null ? null : Number(data.institucion_id),
+          enlaceDescargaMega: data.enlace_descarga_mega
+            ? String(data.enlace_descarga_mega)
+            : null,
           fechaRecibido: String(data.fecha_recibido ?? formatDateISO(recibido)),
           fechaEntrega: data.fecha_entrega ? String(data.fecha_entrega) : null,
           estado: parseEstado(data.estado),
@@ -237,6 +243,7 @@ export default function NuevoTrabajoScreen() {
     setClienteId(null);
     setEspecialidadId(null);
     setInstitucionId(null);
+    setEnlaceDescargaMega('');
     setFechaRecibido(new Date());
     setFechaEntrega(null);
     setMessage('Trabajo creado correctamente.');
@@ -254,6 +261,15 @@ export default function NuevoTrabajoScreen() {
           style={styles.input}
           value={nombreTrabajo}
           onChangeText={setNombreTrabajo}
+        />
+        <TextInput
+          placeholder="Enlace de descarga MEGA (opcional)"
+          placeholderTextColor={colors.inputPlaceholder}
+          style={styles.input}
+          value={enlaceDescargaMega}
+          onChangeText={setEnlaceDescargaMega}
+          autoCapitalize='none'
+          autoCorrect={false}
         />
 
         {loadingCatalogs ? (
@@ -377,6 +393,17 @@ function formatDateDisplay(date: Date) {
   return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
 }
 
+function normalizeMegaLink(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
 function parseEstado(rawValue: unknown): 'creado' | 'en_proceso' | 'terminado' | 'entregado' {
   if (rawValue === 'entregado') {
     return 'entregado';
@@ -398,7 +425,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     },
     content: {
       padding: 20,
-      paddingBottom: 140,
+      paddingBottom: 220,
     },
     card: {
       backgroundColor: colors.card,

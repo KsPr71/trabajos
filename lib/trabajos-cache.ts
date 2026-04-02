@@ -7,6 +7,7 @@ export type CachedTrabajo = {
   especialidad: string;
   tipoTrabajo: string;
   tipoTrabajoColor: string | null;
+  enlaceDescargaMega: string | null;
   fechaEntrega: string | null;
   estadoCreadoAt: string | null;
   estadoEnProcesoAt: string | null;
@@ -23,6 +24,7 @@ export type CachedTrabajoDetalle = {
   clienteId: number;
   especialidadId: number;
   institucionId: number | null;
+  enlaceDescargaMega: string | null;
   fechaRecibido: string;
   fechaEntrega: string | null;
   estado: 'creado' | 'en_proceso' | 'terminado' | 'entregado';
@@ -62,6 +64,7 @@ async function ensureSchema() {
         especialidad text not null,
         tipo_trabajo text not null default '',
         tipo_trabajo_color text,
+        enlace_descarga_mega text,
         fecha_entrega text,
         estado_creado_at text,
         estado_en_proceso_at text,
@@ -74,6 +77,7 @@ async function ensureSchema() {
 
     await ensureColumn(db, 'trabajos_cache', 'tipo_trabajo');
     await ensureColumn(db, 'trabajos_cache', 'tipo_trabajo_color');
+    await ensureColumn(db, 'trabajos_cache', 'enlace_descarga_mega');
     await ensureColumn(db, 'trabajos_cache', 'fecha_entrega');
     await ensureColumn(db, 'trabajos_cache', 'estado_creado_at');
     await ensureColumn(db, 'trabajos_cache', 'estado_en_proceso_at');
@@ -95,6 +99,7 @@ async function ensureSchema() {
         cliente_id integer not null,
         especialidad_id integer not null,
         institucion_id integer,
+        enlace_descarga_mega text,
         fecha_recibido text not null,
         fecha_entrega text,
         estado text not null,
@@ -105,6 +110,7 @@ async function ensureSchema() {
         updated_at text not null
       )`
     );
+    await ensureColumn(db, 'trabajos_detalle_cache', 'enlace_descarga_mega');
 
     initialized = true;
   })();
@@ -118,10 +124,11 @@ async function ensureSchema() {
 
 async function ensureColumn(
   db: SQLite.SQLiteDatabase,
-  tableName: 'trabajos_cache',
+  tableName: 'trabajos_cache' | 'trabajos_detalle_cache',
   columnName:
     | 'tipo_trabajo'
     | 'tipo_trabajo_color'
+    | 'enlace_descarga_mega'
     | 'fecha_entrega'
     | 'estado_creado_at'
     | 'estado_en_proceso_at'
@@ -144,6 +151,10 @@ async function ensureColumn(
     await db.runAsync(`alter table ${tableName} add column tipo_trabajo_color text`);
     return;
   }
+  if (columnName === 'enlace_descarga_mega') {
+    await db.runAsync(`alter table ${tableName} add column enlace_descarga_mega text`);
+    return;
+  }
 
   if (columnName === 'fecha_entrega') {
     await db.runAsync(`alter table ${tableName} add column fecha_entrega text`);
@@ -164,6 +175,7 @@ export async function getCachedTrabajos(): Promise<CachedTrabajo[]> {
     especialidad: string;
     tipo_trabajo: string;
     tipo_trabajo_color: string | null;
+    enlace_descarga_mega: string | null;
     fecha_entrega: string | null;
     estado_creado_at: string | null;
     estado_en_proceso_at: string | null;
@@ -172,7 +184,7 @@ export async function getCachedTrabajos(): Promise<CachedTrabajo[]> {
     estado: string;
     updated_at: string;
   }>(
-    `select id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, fecha_entrega,
+    `select id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, enlace_descarga_mega, fecha_entrega,
             estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at,
             estado, updated_at
      from trabajos_cache
@@ -186,6 +198,7 @@ export async function getCachedTrabajos(): Promise<CachedTrabajo[]> {
     especialidad: row.especialidad,
     tipoTrabajo: row.tipo_trabajo ?? '',
     tipoTrabajoColor: row.tipo_trabajo_color ?? null,
+    enlaceDescargaMega: row.enlace_descarga_mega ?? null,
     fechaEntrega: row.fecha_entrega ?? null,
     estadoCreadoAt: row.estado_creado_at ?? null,
     estadoEnProcesoAt: row.estado_en_proceso_at ?? null,
@@ -208,11 +221,11 @@ export async function replaceCachedTrabajos(trabajos: CachedTrabajo[]): Promise<
       for (const trabajo of trabajos) {
         await db.runAsync(
           `insert into trabajos_cache (
-             id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, fecha_entrega,
+             id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, enlace_descarga_mega, fecha_entrega,
              estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at,
              estado, updated_at
            )
-           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             trabajo.id,
             trabajo.nombreTrabajo,
@@ -220,6 +233,7 @@ export async function replaceCachedTrabajos(trabajos: CachedTrabajo[]): Promise<
             trabajo.especialidad,
             trabajo.tipoTrabajo ?? '',
             trabajo.tipoTrabajoColor ?? null,
+            trabajo.enlaceDescargaMega ?? null,
             trabajo.fechaEntrega ?? null,
             trabajo.estadoCreadoAt ?? null,
             trabajo.estadoEnProcesoAt ?? null,
@@ -249,17 +263,18 @@ export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void>
 
     await db.runAsync(
       `insert into trabajos_cache (
-         id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, fecha_entrega,
+         id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, enlace_descarga_mega, fecha_entrega,
          estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at,
          estado, updated_at
        )
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(id) do update set
          nombre_trabajo = excluded.nombre_trabajo,
          autor = excluded.autor,
          especialidad = excluded.especialidad,
          tipo_trabajo = excluded.tipo_trabajo,
          tipo_trabajo_color = excluded.tipo_trabajo_color,
+         enlace_descarga_mega = excluded.enlace_descarga_mega,
          fecha_entrega = excluded.fecha_entrega,
          estado_creado_at = excluded.estado_creado_at,
          estado_en_proceso_at = excluded.estado_en_proceso_at,
@@ -274,6 +289,7 @@ export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void>
         trabajo.especialidad,
         trabajo.tipoTrabajo ?? '',
         trabajo.tipoTrabajoColor ?? null,
+        trabajo.enlaceDescargaMega ?? null,
         trabajo.fechaEntrega ?? null,
         trabajo.estadoCreadoAt ?? null,
         trabajo.estadoEnProcesoAt ?? null,
@@ -310,6 +326,7 @@ export async function getCachedTrabajoDetalleById(
     cliente_id: number;
     especialidad_id: number;
     institucion_id: number | null;
+    enlace_descarga_mega: string | null;
     fecha_recibido: string;
     fecha_entrega: string | null;
     estado: string;
@@ -319,7 +336,7 @@ export async function getCachedTrabajoDetalleById(
     estado_entregado_at: string | null;
     updated_at: string;
   }>(
-    `select id, nombre_trabajo, tipo_trabajo_id, cliente_id, especialidad_id, institucion_id,
+    `select id, nombre_trabajo, tipo_trabajo_id, cliente_id, especialidad_id, institucion_id, enlace_descarga_mega,
             fecha_recibido, fecha_entrega, estado, estado_creado_at, estado_en_proceso_at,
             estado_terminado_at, estado_entregado_at, updated_at
      from trabajos_detalle_cache
@@ -338,6 +355,7 @@ export async function getCachedTrabajoDetalleById(
     clienteId: row.cliente_id,
     especialidadId: row.especialidad_id,
     institucionId: row.institucion_id,
+    enlaceDescargaMega: row.enlace_descarga_mega ?? null,
     fechaRecibido: row.fecha_recibido,
     fechaEntrega: row.fecha_entrega,
     estado: parseEstado(row.estado),
@@ -359,16 +377,18 @@ export async function upsertCachedTrabajoDetalle(
     await db.runAsync(
       `insert into trabajos_detalle_cache (
          id, nombre_trabajo, tipo_trabajo_id, cliente_id, especialidad_id, institucion_id,
+         enlace_descarga_mega,
          fecha_recibido, fecha_entrega, estado, estado_creado_at, estado_en_proceso_at,
          estado_terminado_at, estado_entregado_at, updated_at
        )
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(id) do update set
          nombre_trabajo = excluded.nombre_trabajo,
          tipo_trabajo_id = excluded.tipo_trabajo_id,
          cliente_id = excluded.cliente_id,
          especialidad_id = excluded.especialidad_id,
          institucion_id = excluded.institucion_id,
+         enlace_descarga_mega = excluded.enlace_descarga_mega,
          fecha_recibido = excluded.fecha_recibido,
          fecha_entrega = excluded.fecha_entrega,
          estado = excluded.estado,
@@ -384,6 +404,7 @@ export async function upsertCachedTrabajoDetalle(
         detalle.clienteId,
         detalle.especialidadId,
         detalle.institucionId,
+        detalle.enlaceDescargaMega ?? null,
         detalle.fechaRecibido,
         detalle.fechaEntrega ?? null,
         detalle.estado,

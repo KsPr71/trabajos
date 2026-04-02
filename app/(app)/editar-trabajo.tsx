@@ -55,6 +55,7 @@ export default function EditarTrabajoScreen() {
   const [clienteId, setClienteId] = useState<number | null>(null);
   const [especialidadId, setEspecialidadId] = useState<number | null>(null);
   const [institucionId, setInstitucionId] = useState<number | null>(null);
+  const [enlaceDescargaMega, setEnlaceDescargaMega] = useState('');
   const [estado, setEstado] = useState<EstadoTrabajo>('creado');
   const [estadoOriginal, setEstadoOriginal] = useState<EstadoTrabajo>('creado');
 
@@ -96,6 +97,7 @@ export default function EditarTrabajoScreen() {
         setClienteId(cachedDetalle.clienteId);
         setEspecialidadId(cachedDetalle.especialidadId);
         setInstitucionId(cachedDetalle.institucionId);
+        setEnlaceDescargaMega(cachedDetalle.enlaceDescargaMega ?? '');
         setFechaRecibido(parseDateFromISO(cachedDetalle.fechaRecibido));
         setFechaEntrega(
           cachedDetalle.fechaEntrega ? parseDateFromISO(cachedDetalle.fechaEntrega) : null
@@ -153,7 +155,7 @@ export default function EditarTrabajoScreen() {
       supabase
         .from('trabajos')
         .select(
-          'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
+          'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,enlace_descarga_mega,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
         )
         .eq('id', trabajoId)
         .maybeSingle(),
@@ -220,6 +222,7 @@ export default function EditarTrabajoScreen() {
     setClienteId(Number(trabajoRes.data.cliente_id ?? null));
     setEspecialidadId(Number(trabajoRes.data.especialidad_id ?? null));
     setInstitucionId(trabajoRes.data.institucion_id === null ? null : Number(trabajoRes.data.institucion_id));
+    setEnlaceDescargaMega(trabajoRes.data.enlace_descarga_mega ? String(trabajoRes.data.enlace_descarga_mega) : '');
     setFechaRecibido(parseDateFromISO(String(trabajoRes.data.fecha_recibido)));
     setFechaEntrega(
       trabajoRes.data.fecha_entrega ? parseDateFromISO(String(trabajoRes.data.fecha_entrega)) : null
@@ -238,6 +241,9 @@ export default function EditarTrabajoScreen() {
         especialidadId: Number(trabajoRes.data.especialidad_id ?? 0),
         institucionId:
           trabajoRes.data.institucion_id === null ? null : Number(trabajoRes.data.institucion_id),
+        enlaceDescargaMega: trabajoRes.data.enlace_descarga_mega
+          ? String(trabajoRes.data.enlace_descarga_mega)
+          : null,
         fechaRecibido: String(trabajoRes.data.fecha_recibido ?? formatDateISO(new Date())),
         fechaEntrega: trabajoRes.data.fecha_entrega ? String(trabajoRes.data.fecha_entrega) : null,
         estado: parsedEstado,
@@ -308,6 +314,7 @@ export default function EditarTrabajoScreen() {
 
   const handleSubmit = async () => {
     const cleanNombre = nombreTrabajo.trim();
+    const cleanEnlaceDescargaMega = normalizeMegaLink(enlaceDescargaMega);
     const recibido = normalizeDate(fechaRecibido);
     const entrega = fechaEntrega ? normalizeDate(fechaEntrega) : null;
 
@@ -339,13 +346,14 @@ export default function EditarTrabajoScreen() {
         cliente_id: clienteId,
         especialidad_id: especialidadId,
         institucion_id: institucionId,
+        enlace_descarga_mega: cleanEnlaceDescargaMega,
         fecha_recibido: formatDateISO(recibido),
         fecha_entrega: entrega ? formatDateISO(entrega) : null,
         estado,
       })
       .eq('id', trabajoId)
       .select(
-        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
+        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,enlace_descarga_mega,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
       )
       .maybeSingle();
 
@@ -366,6 +374,7 @@ export default function EditarTrabajoScreen() {
         especialidad: getOptionLabel(especialidades, especialidadId, 'Sin especialidad'),
         tipoTrabajo: getOptionLabel(tiposTrabajo, tipoTrabajoId, 'Sin tipo'),
         tipoTrabajoColor: tipoTrabajoId ? tipoTrabajoColorById[tipoTrabajoId] ?? null : null,
+        enlaceDescargaMega: cleanEnlaceDescargaMega,
         fechaEntrega: entrega ? formatDateISO(entrega) : null,
         estadoCreadoAt: data.estado_creado_at
           ? String(data.estado_creado_at)
@@ -387,6 +396,7 @@ export default function EditarTrabajoScreen() {
         especialidadId: Number(data.especialidad_id ?? especialidadId),
         institucionId:
           data.institucion_id === null ? null : Number(data.institucion_id ?? institucionId),
+        enlaceDescargaMega: data.enlace_descarga_mega ? String(data.enlace_descarga_mega) : null,
         fechaRecibido: String(data.fecha_recibido ?? formatDateISO(recibido)),
         fechaEntrega: data.fecha_entrega ? String(data.fecha_entrega) : null,
         estado: parseEstado(data.estado),
@@ -488,6 +498,15 @@ export default function EditarTrabajoScreen() {
               style={styles.input}
               value={nombreTrabajo}
               onChangeText={setNombreTrabajo}
+            />
+            <TextInput
+              placeholder="Enlace de descarga MEGA (opcional)"
+              placeholderTextColor={colors.inputPlaceholder}
+              style={styles.input}
+              value={enlaceDescargaMega}
+              onChangeText={setEnlaceDescargaMega}
+              autoCapitalize='none'
+              autoCorrect={false}
             />
 
             <ComboBox
@@ -763,6 +782,17 @@ function formatDateDisplay(date: Date) {
   return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
 }
 
+function normalizeMegaLink(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
 function confirmWhatsAppSend() {
   return new Promise<boolean>((resolve) => {
     let settled = false;
@@ -836,6 +866,7 @@ function createStyles(colors: ThemeColors) {
     },
     content: {
       padding: 20,
+      paddingBottom: 220,
     },
     card: {
       backgroundColor: colors.card,
