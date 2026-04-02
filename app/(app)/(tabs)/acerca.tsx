@@ -4,7 +4,7 @@ import Logo from "@/components/ui/Logo";
 import { useAppTheme } from "@/providers/theme-provider";
 
 const APP_NAME = "Archei";
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 
 export default function AcercaScreen() {
   const { colors } = useAppTheme();
