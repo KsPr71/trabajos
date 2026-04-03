@@ -1,10 +1,11 @@
-import { StyleSheet, Text, View } from "react-native";
+import Constants from 'expo-constants';
+import { StyleSheet, Text, View } from 'react-native';
 
-import Logo from "@/components/ui/Logo";
-import { useAppTheme } from "@/providers/theme-provider";
+import Logo from '@/components/ui/Logo';
+import { useAppTheme } from '@/providers/theme-provider';
 
-const APP_NAME = "Archei";
-const APP_VERSION = "1.3.0";
+const APP_NAME = 'Archei';
+const APP_VERSION = Constants.expoConfig?.version ?? '1.4.0';
 
 export default function AcercaScreen() {
   const { colors } = useAppTheme();
@@ -50,7 +51,7 @@ export default function AcercaScreen() {
   );
 }
 
-function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
+function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -68,9 +69,9 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       gap: 8,
     },
     heroRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
     },
     heroTextWrap: {
       flex: 1,
@@ -85,15 +86,15 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
     title: {
       color: colors.textPrimary,
       fontSize: 24,
-      fontWeight: "800",
+      fontWeight: '800',
     },
     subtitle: {
       color: colors.textSecondary,
       fontSize: 14,
-      fontWeight: "500",
+      fontWeight: '500',
     },
     badge: {
-      alignSelf: "flex-start",
+      alignSelf: 'flex-start',
       backgroundColor: colors.badgeBg,
       borderRadius: 999,
       paddingHorizontal: 10,
@@ -103,12 +104,12 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
     badgeText: {
       color: colors.badgeText,
       fontSize: 12,
-      fontWeight: "700",
+      fontWeight: '700',
     },
     sectionTitle: {
       color: colors.textPrimary,
       fontSize: 16,
-      fontWeight: "700",
+      fontWeight: '700',
       marginBottom: 2,
     },
     itemText: {

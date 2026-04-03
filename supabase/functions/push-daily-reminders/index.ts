@@ -33,7 +33,6 @@ Deno.serve(async (req) => {
       .select('id,nombre_trabajo,fecha_entrega,estado,owner_user_id')
       .not('owner_user_id', 'is', null)
       .not('fecha_entrega', 'is', null)
-      .gte('fecha_entrega', todayISO)
       .lte('fecha_entrega', weekEndISO)
       .not('estado', 'in', '("terminado","entregado")');
 
@@ -91,6 +90,9 @@ Deno.serve(async (req) => {
       data: Record<string, unknown>;
     }[] = [];
 
+    let overdueCount = 0;
+    let upcomingCount = 0;
+
     for (const trabajo of trabajos) {
       const ownerUserId = trabajo.owner_user_id;
       const fechaEntrega = trabajo.fecha_entrega;
@@ -119,20 +121,32 @@ Deno.serve(async (req) => {
       }
 
       const daysLeft = getDaysDiff(todayISO, fechaEntrega);
-      const remainingText = daysLeft <= 0 ? 'vence hoy' : `faltan ${daysLeft} dias`;
-      const body = `${trabajo.nombre_trabajo}: ${remainingText} para la entrega (${toDisplayDate(fechaEntrega)}).`;
+      const isOverdue = daysLeft < 0;
+      const overdueDays = isOverdue ? getDaysDiff(fechaEntrega, todayISO) : 0;
+      const title = isOverdue ? 'Trabajo atrasado' : 'Recordatorio de entrega';
+      const body = isOverdue
+        ? `El trabajo "${trabajo.nombre_trabajo}" esta atrasado en su fecha de entrega ${formatDays(overdueDays)}.`
+        : `${trabajo.nombre_trabajo}: ${daysLeft === 0 ? 'vence hoy' : `faltan ${daysLeft} dias`} para la entrega (${toDisplayDate(fechaEntrega)}).`;
+
+      if (isOverdue) {
+        overdueCount += 1;
+      } else {
+        upcomingCount += 1;
+      }
 
       for (const token of userTokens) {
         messages.push({
           to: token,
           sound: 'default',
-          title: 'Recordatorio de entrega',
+          title,
           body,
           data: {
-            type: 'recordatorio_entrega',
+            type: isOverdue ? 'recordatorio_atraso_entrega' : 'recordatorio_entrega',
             trabajoId: trabajo.id,
             fechaEntrega,
             diasRestantes: daysLeft,
+            diasAtraso: isOverdue ? overdueDays : 0,
+            isAtrasado: isOverdue,
           },
         });
       }
@@ -147,7 +161,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ ok: false, error: result.error, detail: result.responses }, 500);
     }
 
-    return jsonResponse({ ok: true, sent: result.sent });
+    return jsonResponse({
+      ok: true,
+      sent: result.sent,
+      trabajosAtrasados: overdueCount,
+      trabajosProximos: upcomingCount,
+    });
   } catch (error) {
     return jsonResponse({ error: String(error) }, 500);
   }
@@ -173,6 +192,14 @@ function toDisplayDate(value: string) {
     return value;
   }
   return `${day}/${month}/${year}`;
+}
+
+function formatDays(days: number) {
+  const safeDays = Math.max(0, Math.round(days));
+  if (safeDays === 1) {
+    return '1 dia';
+  }
+  return `${safeDays} dias`;
 }
 
 function jsonResponse(payload: unknown, status = 200) {

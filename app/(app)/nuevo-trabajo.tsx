@@ -1,4 +1,5 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
 import {
@@ -25,6 +26,7 @@ import { supabase } from '@/lib/supabase';
 import { useAppTheme } from '@/providers/theme-provider';
 
 type PickerField = 'recibido' | 'entrega' | null;
+type TipoDocumentoItem = { id: number; nombre: string };
 
 export default function NuevoTrabajoScreen() {
   const { colors } = useAppTheme();
@@ -45,6 +47,8 @@ export default function NuevoTrabajoScreen() {
   const [tiposTrabajo, setTiposTrabajo] = useState<ComboOption[]>([]);
   const [especialidades, setEspecialidades] = useState<ComboOption[]>([]);
   const [instituciones, setInstituciones] = useState<ComboOption[]>([]);
+  const [tiposDocumento, setTiposDocumento] = useState<TipoDocumentoItem[]>([]);
+  const [selectedTipoDocumentoIds, setSelectedTipoDocumentoIds] = useState<number[]>([]);
 
   const [loadingCatalogs, setLoadingCatalogs] = useState(true);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
@@ -56,45 +60,51 @@ export default function NuevoTrabajoScreen() {
 
     let hasCachedCatalogs = false;
     try {
-      const [cachedClientes, cachedTiposTrabajo, cachedEspecialidades, cachedInstituciones] =
+      const [cachedClientes, cachedTiposTrabajo, cachedEspecialidades, cachedInstituciones, cachedTiposDocumento] =
         await Promise.all([
           getCachedCatalogo('clientes'),
           getCachedCatalogo('tipo_trabajo'),
           getCachedCatalogo('especialidad'),
           getCachedCatalogo('institucion'),
+          getCachedCatalogo('tipo_documento'),
         ]);
 
       const clientesFromCache = mapRowsToOptions(cachedClientes);
       const tiposFromCache = mapRowsToOptions(cachedTiposTrabajo);
       const especialidadesFromCache = mapRowsToOptions(cachedEspecialidades);
       const institucionesFromCache = mapRowsToOptions(cachedInstituciones);
+      const tiposDocumentoFromCache = mapRowsToSimpleItems(cachedTiposDocumento);
 
       hasCachedCatalogs =
         clientesFromCache.length > 0 ||
         tiposFromCache.length > 0 ||
         especialidadesFromCache.length > 0 ||
-        institucionesFromCache.length > 0;
+        institucionesFromCache.length > 0 ||
+        tiposDocumentoFromCache.length > 0;
 
       if (hasCachedCatalogs) {
         setClientes(clientesFromCache);
         setTiposTrabajo(tiposFromCache);
         setEspecialidades(especialidadesFromCache);
         setInstituciones(institucionesFromCache);
+        setTiposDocumento(tiposDocumentoFromCache);
         setLoadingCatalogs(false);
       }
     } catch (cacheError) {
       console.warn('No se pudo leer cache local de catalogos.', cacheError);
     }
 
-    const [clientesRes, tiposRes, especialidadRes, institucionRes] = await Promise.all([
+    const [clientesRes, tiposRes, especialidadRes, institucionRes, tipoDocumentoRes] = await Promise.all([
       supabase.from('clientes').select('id,nombre,telefono,created_at').order('nombre', { ascending: true }),
       supabase.from('tipo_trabajo').select('id,nombre,created_at').order('nombre', { ascending: true }),
       supabase.from('especialidad').select('id,nombre,created_at').order('nombre', { ascending: true }),
       supabase.from('institucion').select('id,nombre,created_at').order('nombre', { ascending: true }),
+      supabase.from('tipo_documento').select('id,nombre,created_at').order('nombre', { ascending: true }),
     ]);
 
-    if (clientesRes.error || tiposRes.error || especialidadRes.error || institucionRes.error) {
-      const firstError = clientesRes.error ?? tiposRes.error ?? especialidadRes.error ?? institucionRes.error;
+    if (clientesRes.error || tiposRes.error || especialidadRes.error || institucionRes.error || tipoDocumentoRes.error) {
+      const firstError =
+        clientesRes.error ?? tiposRes.error ?? especialidadRes.error ?? institucionRes.error ?? tipoDocumentoRes.error;
       if (hasCachedCatalogs) {
         setMessage('Mostrando catalogos locales. No se pudo sincronizar con Supabase.');
       } else {
@@ -108,11 +118,13 @@ export default function NuevoTrabajoScreen() {
     const tiposRows = mapSupabaseCatalogRows(tiposRes.data);
     const especialidadRows = mapSupabaseCatalogRows(especialidadRes.data);
     const institucionRows = mapSupabaseCatalogRows(institucionRes.data);
+    const tipoDocumentoRows = mapSupabaseCatalogRows(tipoDocumentoRes.data);
 
     setClientes(mapRowsToOptions(clientesRows));
     setTiposTrabajo(mapRowsToOptions(tiposRows));
     setEspecialidades(mapRowsToOptions(especialidadRows));
     setInstituciones(mapRowsToOptions(institucionRows));
+    setTiposDocumento(mapRowsToSimpleItems(tipoDocumentoRows));
     setLoadingCatalogs(false);
 
     try {
@@ -121,6 +133,7 @@ export default function NuevoTrabajoScreen() {
         replaceCachedCatalogo('tipo_trabajo', tiposRows),
         replaceCachedCatalogo('especialidad', especialidadRows),
         replaceCachedCatalogo('institucion', institucionRows),
+        replaceCachedCatalogo('tipo_documento', tipoDocumentoRows),
       ]);
     } catch (cacheError) {
       console.warn('No se pudo actualizar cache local de catalogos.', cacheError);
@@ -161,6 +174,14 @@ export default function NuevoTrabajoScreen() {
     }
   };
 
+  const toggleTipoDocumento = (tipoDocumentoId: number) => {
+    setSelectedTipoDocumentoIds((prev) =>
+      prev.includes(tipoDocumentoId)
+        ? prev.filter((id) => id !== tipoDocumentoId)
+        : [...prev, tipoDocumentoId]
+    );
+  };
+
   const handleSubmit = async () => {
     const cleanNombre = nombreTrabajo.trim();
     const cleanEnlaceDescargaMega = normalizeMegaLink(enlaceDescargaMega);
@@ -192,12 +213,13 @@ export default function NuevoTrabajoScreen() {
         especialidad_id: especialidadId,
         institucion_id: institucionId,
         enlace_descarga_mega: cleanEnlaceDescargaMega,
+        pagado: false,
         fecha_recibido: formatDateISO(recibido),
         fecha_entrega: entrega ? formatDateISO(entrega) : null,
         estado: 'creado',
       })
       .select(
-        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,enlace_descarga_mega,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
+        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,enlace_descarga_mega,pagado,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
       )
       .maybeSingle();
 
@@ -209,9 +231,41 @@ export default function NuevoTrabajoScreen() {
     }
 
     if (data) {
+      const trabajoCreadoId = Number(data.id);
+      let documentosCreados = selectedTipoDocumentoIds.map((tipoDocumentoId, index) => ({
+        id: -1 - index,
+        nombreDocumento:
+          tiposDocumento.find((item) => item.id === tipoDocumentoId)?.nombre ?? `Documento ${tipoDocumentoId}`,
+        descripcion: null,
+        fechaRecepcion: formatDateISO(new Date()),
+        tipoDocumentoId,
+      }));
+
+      if (selectedTipoDocumentoIds.length > 0 && Number.isFinite(trabajoCreadoId)) {
+        const documentosPayload = selectedTipoDocumentoIds.map((tipoDocumentoId) => ({
+          trabajo_id: trabajoCreadoId,
+          tipo_documento_id: tipoDocumentoId,
+          nombre_documento:
+            tiposDocumento.find((item) => item.id === tipoDocumentoId)?.nombre ?? `Documento ${tipoDocumentoId}`,
+          descripcion: null,
+          fecha_recepcion: formatDateISO(new Date()),
+        }));
+
+        const { data: documentosData, error: documentosError } = await supabase
+          .from('documentos_recibidos')
+          .insert(documentosPayload)
+          .select('id,nombre_documento,descripcion,fecha_recepcion,tipo_documento_id');
+
+        if (documentosError) {
+          setMessage(`Trabajo creado, pero no se pudieron guardar documentos: ${documentosError.message}`);
+        } else {
+          documentosCreados = mapDocumentosRecibidosRows(documentosData);
+        }
+      }
+
       try {
         await upsertCachedTrabajoDetalle({
-          id: Number(data.id),
+          id: trabajoCreadoId,
           nombreTrabajo: String(data.nombre_trabajo ?? cleanNombre),
           tipoTrabajoId: Number(data.tipo_trabajo_id ?? tipoTrabajoId),
           clienteId: Number(data.cliente_id ?? clienteId),
@@ -231,6 +285,8 @@ export default function NuevoTrabajoScreen() {
           estadoEnProcesoAt: data.estado_en_proceso_at ? String(data.estado_en_proceso_at) : null,
           estadoTerminadoAt: data.estado_terminado_at ? String(data.estado_terminado_at) : null,
           estadoEntregadoAt: data.estado_entregado_at ? String(data.estado_entregado_at) : null,
+          pagado: data.pagado === true || Number(data.pagado) === 1,
+          documentosRecibidos: documentosCreados,
           updatedAt: new Date().toISOString(),
         });
       } catch (cacheError) {
@@ -244,6 +300,7 @@ export default function NuevoTrabajoScreen() {
     setEspecialidadId(null);
     setInstitucionId(null);
     setEnlaceDescargaMega('');
+    setSelectedTipoDocumentoIds([]);
     setFechaRecibido(new Date());
     setFechaEntrega(null);
     setMessage('Trabajo creado correctamente.');
@@ -314,6 +371,45 @@ export default function NuevoTrabajoScreen() {
             <Pressable onPress={() => setInstitucionId(null)} style={styles.clearButton}>
               <Text style={styles.clearButtonText}>Quitar institucion</Text>
             </Pressable>
+
+            <View style={styles.documentosBlock}>
+              <Text style={styles.label}>Documentos recibidos</Text>
+              {tiposDocumento.length === 0 ? (
+                <Text style={styles.documentosHelpText}>
+                  No hay tipos de documento registrados.
+                </Text>
+              ) : (
+                <View style={styles.documentosChipsWrap}>
+                  {tiposDocumento.map((tipoDocumento) => {
+                    const selected = selectedTipoDocumentoIds.includes(tipoDocumento.id);
+                    return (
+                      <Pressable
+                        key={tipoDocumento.id}
+                        onPress={() => toggleTipoDocumento(tipoDocumento.id)}
+                        style={[
+                          styles.documentoChip,
+                          selected ? styles.documentoChipSelected : null,
+                        ]}
+                      >
+                        <Ionicons
+                          name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={14}
+                          color={selected ? colors.buttonText : colors.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.documentoChipText,
+                            selected ? styles.documentoChipTextSelected : null,
+                          ]}
+                        >
+                          {tipoDocumento.nombre}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           </>
         )}
 
@@ -376,6 +472,61 @@ function mapRowsToOptions(rows: unknown): ComboOption[] {
       };
     })
     .filter((item) => Number.isFinite(item.id) && item.label.length > 0);
+}
+
+function mapRowsToSimpleItems(rows: unknown): TipoDocumentoItem[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .map((row) => {
+      const typedRow = row as { id?: number | string; nombre?: string };
+      return {
+        id: Number(typedRow.id),
+        nombre: String(typedRow.nombre ?? ''),
+      };
+    })
+    .filter((item) => Number.isFinite(item.id) && item.nombre.length > 0);
+}
+
+function mapDocumentosRecibidosRows(rows: unknown) {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .map((row, index) => {
+      const typedRow = row as {
+        id?: number | string;
+        nombre_documento?: string;
+        descripcion?: string | null;
+        fecha_recepcion?: string | null;
+        tipo_documento_id?: number | string | null;
+      };
+
+      const id = Number(typedRow.id ?? -1 - index);
+      const nombreDocumento = String(typedRow.nombre_documento ?? '').trim();
+      const fechaRecepcionRaw = typedRow.fecha_recepcion ? String(typedRow.fecha_recepcion) : '';
+      const fechaRecepcion = /^\d{4}-\d{2}-\d{2}$/.test(fechaRecepcionRaw)
+        ? fechaRecepcionRaw
+        : formatDateISO(new Date());
+
+      return {
+        id,
+        nombreDocumento,
+        descripcion:
+          typeof typedRow.descripcion === 'string' && typedRow.descripcion.trim().length > 0
+            ? typedRow.descripcion.trim()
+            : null,
+        fechaRecepcion,
+        tipoDocumentoId:
+          typedRow.tipo_documento_id === null || typedRow.tipo_documento_id === undefined
+            ? null
+            : Number(typedRow.tipo_documento_id),
+      };
+    })
+    .filter((item) => Number.isFinite(item.id) && item.nombreDocumento.length > 0);
 }
 
 function normalizeDate(date: Date) {
@@ -481,6 +632,41 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['colors']) {
     clearButtonText: {
       color: colors.inputText,
       fontWeight: '600',
+    },
+    documentosBlock: {
+      gap: 8,
+    },
+    documentosHelpText: {
+      color: colors.textSecondary,
+      fontSize: 13,
+    },
+    documentosChipsWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    documentoChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderRadius: 9999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBg,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    documentoChipSelected: {
+      borderColor: colors.buttonBg,
+      backgroundColor: colors.buttonBg,
+    },
+    documentoChipText: {
+      color: colors.inputText,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    documentoChipTextSelected: {
+      color: colors.buttonText,
     },
     dateBlock: {
       gap: 6,

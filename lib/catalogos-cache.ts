@@ -1,6 +1,11 @@
 import * as SQLite from 'expo-sqlite';
 
-export type CatalogoKey = 'clientes' | 'tipo_trabajo' | 'especialidad' | 'institucion';
+export type CatalogoKey =
+  | 'clientes'
+  | 'tipo_trabajo'
+  | 'especialidad'
+  | 'institucion'
+  | 'tipo_documento';
 
 export type CachedCatalogoItem = {
   id: number;
@@ -24,6 +29,7 @@ const TABLE_BY_KEY: Record<CatalogoKey, string> = {
   tipo_trabajo: 'tipo_trabajo_cache',
   especialidad: 'especialidad_cache',
   institucion: 'institucion_cache',
+  tipo_documento: 'tipo_documento_cache',
 };
 
 let initialized = false;
@@ -77,6 +83,14 @@ async function ensureSchema() {
 
     await db.runAsync(
       `create table if not exists institucion_cache (
+        id integer primary key not null,
+        nombre text not null,
+        updated_at text not null
+      )`
+    );
+
+    await db.runAsync(
+      `create table if not exists tipo_documento_cache (
         id integer primary key not null,
         nombre text not null,
         updated_at text not null

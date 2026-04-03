@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
 import React from "react";
 import { Alert, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -17,6 +18,7 @@ type TrabajoCustomCardProps = {
   estadoEnProcesoAt?: string | null;
   estadoTerminadoAt?: string | null;
   estadoEntregadoAt?: string | null;
+  pagado?: boolean;
   estado: TrabajoCardEstado;
   onPress: () => void;
   accentBorder?: boolean;
@@ -36,6 +38,7 @@ export function TrabajoCustomCard({
   estadoEnProcesoAt = null,
   estadoTerminadoAt = null,
   estadoEntregadoAt = null,
+  pagado = false,
   estado,
   onPress,
   accentBorder = false,
@@ -56,8 +59,7 @@ export function TrabajoCustomCard({
     entregaAlertType ?? (showEntregaAlertChip ? "esta_semana" : null);
   const entregaAlertChip = getEntregaAlertChip(resolvedEntregaAlertType);
   const tiempoLabel = getTiempoLabel(estado);
-  const tabIconName =
-    estado === "entregado" ? "folder-outline" : "folder-open-outline";
+  const tabIconName = estado === "entregado" ? "folder-outline" : "folder-open-outline";
   const showMegaDownloadButton =
     Boolean(enlaceDescargaMega?.trim()) &&
     (estado === "terminado" || estado === "entregado");
@@ -69,14 +71,16 @@ export function TrabajoCustomCard({
     }
 
     try {
-      const canOpen = await Linking.canOpenURL(normalizedLink);
-      if (!canOpen) {
-        Alert.alert("Enlace no disponible", "No se pudo abrir el enlace de MEGA.");
-        return;
-      }
       await Linking.openURL(normalizedLink);
+      return;
+    } catch {}
+
+    try {
+      await WebBrowser.openBrowserAsync(normalizedLink, {
+        showTitle: true,
+      });
     } catch {
-      Alert.alert("Error", "No se pudo abrir el enlace de descarga.");
+      Alert.alert("Enlace no disponible", "No se pudo abrir el enlace de MEGA.");
     }
   };
 
@@ -98,7 +102,7 @@ export function TrabajoCustomCard({
       </View>
 
       <View style={styles.cardBody}>
-        {estado === "entregado" ? <PaidCornerTriangle styles={styles} /> : null}
+        {pagado ? <PaidCornerTriangle styles={styles} /> : null}
 
         <View
           style={[
@@ -147,23 +151,23 @@ export function TrabajoCustomCard({
             </View>
 
             <View style={[styles.chipsRow]}>
-              {showMegaDownloadButton ? (
-                <Pressable
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    void handleMegaDownloadPress();
-                  }}
-                  style={styles.megaButton}
-                >
-                  <View style={styles.megaLogoBadge}>
-                    <Text style={styles.megaLogoText}>M</Text>
-                  </View>
-                  <Text style={styles.megaButtonText}>MEGA</Text>
-                  <Ionicons name="download-outline" size={14} color="#FFFFFF" />
-                </Pressable>
-              ) : null}
-
               <View style={styles.rightChipsRow}>
+                {showMegaDownloadButton ? (
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      void handleMegaDownloadPress();
+                    }}
+                    style={styles.megaButton}
+                  >
+                    <View style={styles.megaLogoBadge}>
+                      <Text style={styles.megaLogoText}>M</Text>
+                    </View>
+                    <Text style={styles.megaButtonText}>MEGA</Text>
+                    <Ionicons name="download-outline" size={14} color="#FFFFFF" />
+                  </Pressable>
+                ) : null}
+
                 {entregaAlertChip ? (
                   <View
                     style={[
@@ -171,11 +175,13 @@ export function TrabajoCustomCard({
                       { backgroundColor: entregaAlertChip.backgroundColor },
                     ]}
                   >
-                    <Ionicons
-                      name="alert-circle-outline"
-                      size={14}
-                      color={entregaAlertChip.textColor}
-                    />
+                    <View style={styles.chipIconBadge}>
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={12}
+                        color={entregaAlertChip.backgroundColor}
+                      />
+                    </View>
                     <Text
                       style={[
                         styles.entregaChipText,
@@ -193,11 +199,13 @@ export function TrabajoCustomCard({
                     { backgroundColor: tipoChipBg, borderColor: tipoChipBg },
                   ]}
                 >
-                  <Ionicons
-                    name="pricetag-outline"
-                    size={13}
-                    color={tipoChipTextColor}
-                  />
+                  <View style={styles.chipIconBadge}>
+                    <Ionicons
+                      name="pricetag-outline"
+                      size={12}
+                      color={tipoChipBg}
+                    />
+                  </View>
                   <Text
                     style={[styles.tipoChipText, { color: tipoChipTextColor }]}
                   >
@@ -211,7 +219,9 @@ export function TrabajoCustomCard({
                     { backgroundColor: chip.backgroundColor },
                   ]}
                 >
-                  <Ionicons name={chip.iconName} size={13} color={chip.textColor} />
+                  <View style={styles.chipIconBadge}>
+                    <Ionicons name={chip.iconName} size={12} color={chip.backgroundColor} />
+                  </View>
                   <Text style={[styles.chipText, { color: chip.textColor }]}>
                     {chip.label}
                   </Text>
@@ -439,6 +449,14 @@ function createTrabajoStyles(colors: ThemeColors) {
       fontSize: 11,
       fontWeight: "900",
       marginTop: -1,
+    },
+    chipIconBadge: {
+      width: 18,
+      height: 18,
+      borderRadius: 999,
+      backgroundColor: "#FFFFFF",
+      alignItems: "center",
+      justifyContent: "center",
     },
     megaButtonText: {
       color: "#FFFFFF",

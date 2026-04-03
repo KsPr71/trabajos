@@ -1,4 +1,5 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -9,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -37,6 +39,14 @@ import { useToast } from '@/providers/toast-provider';
 
 type PickerField = 'recibido' | 'entrega' | null;
 type EstadoTrabajo = 'creado' | 'en_proceso' | 'terminado' | 'entregado';
+type DocumentoRecibido = {
+  id: number;
+  nombreDocumento: string;
+  descripcion: string | null;
+  fechaRecepcion: string;
+  tipoDocumentoId: number | null;
+};
+type TipoDocumentoItem = { id: number; nombre: string };
 
 export default function EditarTrabajoScreen() {
   const { colors } = useAppTheme();
@@ -56,8 +66,12 @@ export default function EditarTrabajoScreen() {
   const [especialidadId, setEspecialidadId] = useState<number | null>(null);
   const [institucionId, setInstitucionId] = useState<number | null>(null);
   const [enlaceDescargaMega, setEnlaceDescargaMega] = useState('');
+  const [pagado, setPagado] = useState(false);
   const [estado, setEstado] = useState<EstadoTrabajo>('creado');
   const [estadoOriginal, setEstadoOriginal] = useState<EstadoTrabajo>('creado');
+  const [documentosRecibidos, setDocumentosRecibidos] = useState<DocumentoRecibido[]>([]);
+  const [tiposDocumento, setTiposDocumento] = useState<TipoDocumentoItem[]>([]);
+  const [selectedTipoDocumentoIds, setSelectedTipoDocumentoIds] = useState<number[]>([]);
 
   const [fechaRecibido, setFechaRecibido] = useState<Date>(new Date());
   const [fechaEntrega, setFechaEntrega] = useState<Date | null>(null);
@@ -88,6 +102,7 @@ export default function EditarTrabajoScreen() {
     estadoTouchedRef.current = false;
 
     let hasCachedDetalle = false;
+    let cachedDocumentos: DocumentoRecibido[] = [];
     try {
       const cachedDetalle = await getCachedTrabajoDetalleById(trabajoId);
       if (cachedDetalle) {
@@ -98,10 +113,14 @@ export default function EditarTrabajoScreen() {
         setEspecialidadId(cachedDetalle.especialidadId);
         setInstitucionId(cachedDetalle.institucionId);
         setEnlaceDescargaMega(cachedDetalle.enlaceDescargaMega ?? '');
+        setPagado(Boolean(cachedDetalle.pagado));
         setFechaRecibido(parseDateFromISO(cachedDetalle.fechaRecibido));
         setFechaEntrega(
           cachedDetalle.fechaEntrega ? parseDateFromISO(cachedDetalle.fechaEntrega) : null
         );
+        cachedDocumentos = cachedDetalle.documentosRecibidos ?? [];
+        setDocumentosRecibidos(cachedDocumentos);
+        setSelectedTipoDocumentoIds(extractSelectedTipoDocumentoIds(cachedDocumentos));
         const parsedCachedEstado = parseEstado(cachedDetalle.estado);
         setEstado(parsedCachedEstado);
         setEstadoOriginal(parsedCachedEstado);
@@ -114,24 +133,27 @@ export default function EditarTrabajoScreen() {
 
     let hasCachedCatalogs = false;
     try {
-      const [cachedClientes, cachedTiposTrabajo, cachedEspecialidades, cachedInstituciones] =
+      const [cachedClientes, cachedTiposTrabajo, cachedEspecialidades, cachedInstituciones, cachedTiposDocumento] =
         await Promise.all([
           getCachedClientesConTelefono(),
           getCachedCatalogo('tipo_trabajo'),
           getCachedCatalogo('especialidad'),
           getCachedCatalogo('institucion'),
+          getCachedCatalogo('tipo_documento'),
         ]);
 
       const clientesFromCache = mapRowsToOptions(cachedClientes);
       const tiposFromCache = mapRowsToOptions(cachedTiposTrabajo);
       const especialidadesFromCache = mapRowsToOptions(cachedEspecialidades);
       const institucionesFromCache = mapRowsToOptions(cachedInstituciones);
+      const tiposDocumentoFromCache = mapRowsToSimpleItems(cachedTiposDocumento);
 
       hasCachedCatalogs =
         clientesFromCache.length > 0 ||
         tiposFromCache.length > 0 ||
         especialidadesFromCache.length > 0 ||
-        institucionesFromCache.length > 0;
+        institucionesFromCache.length > 0 ||
+        tiposDocumentoFromCache.length > 0;
 
       if (hasCachedCatalogs) {
         setClientes(clientesFromCache);
@@ -139,12 +161,13 @@ export default function EditarTrabajoScreen() {
         setTiposTrabajo(tiposFromCache);
         setEspecialidades(especialidadesFromCache);
         setInstituciones(institucionesFromCache);
+        setTiposDocumento(tiposDocumentoFromCache);
       }
     } catch (cacheError) {
       console.warn('No se pudo leer cache local de catalogos en edicion.', cacheError);
     }
 
-    const [clientesRes, tiposRes, especialidadRes, institucionRes, trabajoRes] = await Promise.all([
+    const [clientesRes, tiposRes, especialidadRes, institucionRes, tipoDocumentoRes, trabajoRes, documentosRes] = await Promise.all([
       supabase.from('clientes').select('id,nombre,telefono,created_at').order('nombre', { ascending: true }),
       supabase
         .from('tipo_trabajo')
@@ -152,13 +175,20 @@ export default function EditarTrabajoScreen() {
         .order('nombre', { ascending: true }),
       supabase.from('especialidad').select('id,nombre,created_at').order('nombre', { ascending: true }),
       supabase.from('institucion').select('id,nombre,created_at').order('nombre', { ascending: true }),
+      supabase.from('tipo_documento').select('id,nombre,created_at').order('nombre', { ascending: true }),
       supabase
         .from('trabajos')
         .select(
-          'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,enlace_descarga_mega,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
+          'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,enlace_descarga_mega,pagado,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
         )
         .eq('id', trabajoId)
         .maybeSingle(),
+      supabase
+        .from('documentos_recibidos')
+        .select('id,nombre_documento,descripcion,fecha_recepcion,tipo_documento_id')
+        .eq('trabajo_id', trabajoId)
+        .order('fecha_recepcion', { ascending: false })
+        .order('id', { ascending: false }),
     ]);
 
     if (trabajoRes.error) {
@@ -183,7 +213,8 @@ export default function EditarTrabajoScreen() {
       return;
     }
 
-    const firstCatalogError = clientesRes.error ?? tiposRes.error ?? especialidadRes.error ?? institucionRes.error;
+    const firstCatalogError =
+      clientesRes.error ?? tiposRes.error ?? especialidadRes.error ?? institucionRes.error ?? tipoDocumentoRes.error;
     if (firstCatalogError && !hasCachedCatalogs) {
       setLoadingData(false);
       setMessage(`Error cargando catalogos: ${firstCatalogError.message}`);
@@ -195,6 +226,7 @@ export default function EditarTrabajoScreen() {
       const tiposRows = mapSupabaseCatalogRows(tiposRes.data);
       const especialidadRows = mapSupabaseCatalogRows(especialidadRes.data);
       const institucionRows = mapSupabaseCatalogRows(institucionRes.data);
+      const tipoDocumentoRows = mapSupabaseCatalogRows(tipoDocumentoRes.data);
 
       setClientes(mapRowsToOptions(clientesRows));
       setClientesTelefonoById(buildClientesTelefonoMap(clientesRows));
@@ -202,6 +234,7 @@ export default function EditarTrabajoScreen() {
       setTipoTrabajoColorById(buildTipoTrabajoColorMap(tiposRes.data));
       setEspecialidades(mapRowsToOptions(especialidadRows));
       setInstituciones(mapRowsToOptions(institucionRows));
+      setTiposDocumento(mapRowsToSimpleItems(tipoDocumentoRows));
 
       try {
         await Promise.all([
@@ -209,6 +242,7 @@ export default function EditarTrabajoScreen() {
           replaceCachedCatalogo('tipo_trabajo', tiposRows),
           replaceCachedCatalogo('especialidad', especialidadRows),
           replaceCachedCatalogo('institucion', institucionRows),
+          replaceCachedCatalogo('tipo_documento', tipoDocumentoRows),
         ]);
       } catch (cacheError) {
         console.warn('No se pudo actualizar cache local de catalogos en edicion.', cacheError);
@@ -217,12 +251,28 @@ export default function EditarTrabajoScreen() {
       setMessage('No se pudieron sincronizar catalogos. Usando cache local.');
     }
 
+    if (documentosRes.error) {
+      if (!hasCachedDetalle) {
+        setMessage(`No se pudieron cargar documentos: ${documentosRes.error.message}`);
+      }
+    } else {
+      const documentosMapped = mapDocumentosRecibidosRows(documentosRes.data);
+      setDocumentosRecibidos(documentosMapped);
+      setSelectedTipoDocumentoIds(
+        extractSelectedTipoDocumentoIdsByCatalog(
+          documentosMapped,
+          mapRowsToSimpleItems(mapSupabaseCatalogRows(tipoDocumentoRes.data))
+        )
+      );
+    }
+
     setNombreTrabajo(String(trabajoRes.data.nombre_trabajo ?? ''));
     setTipoTrabajoId(Number(trabajoRes.data.tipo_trabajo_id ?? null));
     setClienteId(Number(trabajoRes.data.cliente_id ?? null));
     setEspecialidadId(Number(trabajoRes.data.especialidad_id ?? null));
     setInstitucionId(trabajoRes.data.institucion_id === null ? null : Number(trabajoRes.data.institucion_id));
     setEnlaceDescargaMega(trabajoRes.data.enlace_descarga_mega ? String(trabajoRes.data.enlace_descarga_mega) : '');
+    setPagado(parseBoolean(trabajoRes.data.pagado));
     setFechaRecibido(parseDateFromISO(String(trabajoRes.data.fecha_recibido)));
     setFechaEntrega(
       trabajoRes.data.fecha_entrega ? parseDateFromISO(String(trabajoRes.data.fecha_entrega)) : null
@@ -261,6 +311,10 @@ export default function EditarTrabajoScreen() {
         estadoEntregadoAt: trabajoRes.data.estado_entregado_at
           ? String(trabajoRes.data.estado_entregado_at)
           : null,
+        pagado: parseBoolean(trabajoRes.data.pagado),
+        documentosRecibidos: documentosRes.error
+          ? cachedDocumentos
+          : mapDocumentosRecibidosRows(documentosRes.data),
         updatedAt: new Date().toISOString(),
       });
     } catch (cacheError) {
@@ -347,13 +401,14 @@ export default function EditarTrabajoScreen() {
         especialidad_id: especialidadId,
         institucion_id: institucionId,
         enlace_descarga_mega: cleanEnlaceDescargaMega,
+        pagado,
         fecha_recibido: formatDateISO(recibido),
         fecha_entrega: entrega ? formatDateISO(entrega) : null,
         estado,
       })
       .eq('id', trabajoId)
       .select(
-        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,enlace_descarga_mega,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
+        'id,nombre_trabajo,tipo_trabajo_id,cliente_id,especialidad_id,institucion_id,enlace_descarga_mega,pagado,fecha_recibido,fecha_entrega,estado,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at'
       )
       .maybeSingle();
 
@@ -364,6 +419,22 @@ export default function EditarTrabajoScreen() {
       setMessage(`Error: ${reason}`);
       showToast('No se pudo actualizar el trabajo.', 'error');
       return;
+    }
+
+    let syncedDocumentos = documentosRecibidos;
+    const syncDocsResult = await syncTipoDocumentosRecibidosForTrabajo({
+      trabajoId: Number(data.id),
+      selectedTipoDocumentoIds,
+      tiposDocumento,
+      existingDocumentos: documentosRecibidos,
+    });
+
+    if (syncDocsResult.errorMessage) {
+      showToast(`No se pudo sincronizar documentos: ${syncDocsResult.errorMessage}`, 'error');
+    } else if (syncDocsResult.documentos.length >= 0) {
+      syncedDocumentos = syncDocsResult.documentos;
+      setDocumentosRecibidos(syncedDocumentos);
+      setSelectedTipoDocumentoIds(extractSelectedTipoDocumentoIds(syncedDocumentos));
     }
 
     try {
@@ -384,6 +455,7 @@ export default function EditarTrabajoScreen() {
         estadoEnProcesoAt: data.estado_en_proceso_at ? String(data.estado_en_proceso_at) : null,
         estadoTerminadoAt: data.estado_terminado_at ? String(data.estado_terminado_at) : null,
         estadoEntregadoAt: data.estado_entregado_at ? String(data.estado_entregado_at) : null,
+        pagado: parseBoolean(data.pagado),
         estado,
         updatedAt: new Date().toISOString(),
       });
@@ -408,6 +480,8 @@ export default function EditarTrabajoScreen() {
         estadoEnProcesoAt: data.estado_en_proceso_at ? String(data.estado_en_proceso_at) : null,
         estadoTerminadoAt: data.estado_terminado_at ? String(data.estado_terminado_at) : null,
         estadoEntregadoAt: data.estado_entregado_at ? String(data.estado_entregado_at) : null,
+        pagado: parseBoolean(data.pagado),
+        documentosRecibidos: syncedDocumentos,
         updatedAt: new Date().toISOString(),
       });
     } catch (cacheError) {
@@ -477,6 +551,14 @@ export default function EditarTrabajoScreen() {
 
     showToast('Trabajo eliminado correctamente.', 'success');
     router.replace('/(app)/(tabs)/trabajos');
+  };
+
+  const toggleTipoDocumento = (tipoDocumentoId: number) => {
+    setSelectedTipoDocumentoIds((prev) =>
+      prev.includes(tipoDocumentoId)
+        ? prev.filter((id) => id !== tipoDocumentoId)
+        : [...prev, tipoDocumentoId]
+    );
   };
 
   return (
@@ -577,6 +659,56 @@ export default function EditarTrabajoScreen() {
                   colors={colors}
                 />
               </View>
+            </View>
+
+            <View style={styles.pagadoBlock}>
+              <Text style={styles.label}>Pagado</Text>
+              <View style={styles.pagadoRow}>
+                <Switch
+                  value={pagado}
+                  onValueChange={setPagado}
+                  trackColor={{ false: colors.border, true: colors.buttonBg }}
+                  thumbColor={colors.buttonText}
+                />
+                <Text style={styles.pagadoText}>
+                  {pagado ? 'Marcado como pagado' : 'No pagado'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.documentosBlock}>
+              <Text style={styles.label}>Documentos recibidos</Text>
+              {tiposDocumento.length === 0 ? (
+                <Text style={styles.documentosEmptyText}>No hay tipos de documento registrados.</Text>
+              ) : (
+                <View style={styles.documentosChipsWrap}>
+                  {tiposDocumento.map((tipoDocumento) => {
+                    const selected = selectedTipoDocumentoIds.includes(tipoDocumento.id);
+                    return (
+                    <Pressable
+                      key={tipoDocumento.id}
+                      onPress={() => toggleTipoDocumento(tipoDocumento.id)}
+                      style={[
+                        styles.documentoChip,
+                        selected ? styles.documentoChipSelected : null,
+                      ]}>
+                      <Ionicons
+                        name={selected ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={14}
+                        color={selected ? colors.buttonText : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.documentoChipText,
+                          selected ? styles.documentoChipTextSelected : null,
+                        ]}>
+                        {tipoDocumento.nombre}
+                      </Text>
+                    </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
 
             <View style={styles.dateBlock}>
@@ -722,6 +854,56 @@ function mapRowsToOptions(rows: unknown): ComboOption[] {
     .filter((item) => Number.isFinite(item.id) && item.label.length > 0);
 }
 
+function mapRowsToSimpleItems(rows: unknown): TipoDocumentoItem[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .map((row) => {
+      const typedRow = row as { id?: number | string; nombre?: string };
+      return {
+        id: Number(typedRow.id),
+        nombre: String(typedRow.nombre ?? ''),
+      };
+    })
+    .filter((item) => Number.isFinite(item.id) && item.nombre.length > 0);
+}
+
+function extractSelectedTipoDocumentoIds(documentos: DocumentoRecibido[]) {
+  return Array.from(
+    new Set(
+      documentos
+        .map((item) => item.tipoDocumentoId)
+        .filter((item): item is number => Number.isFinite(item))
+    )
+  );
+}
+
+function extractSelectedTipoDocumentoIdsByCatalog(
+  documentos: DocumentoRecibido[],
+  tiposDocumento: TipoDocumentoItem[]
+) {
+  const byName = new Map(
+    tiposDocumento.map((item) => [normalizeLabelKey(item.nombre), item.id] as const)
+  );
+
+  const ids = new Set<number>();
+  for (const documento of documentos) {
+    if (documento.tipoDocumentoId !== null && Number.isFinite(documento.tipoDocumentoId)) {
+      ids.add(documento.tipoDocumentoId);
+      continue;
+    }
+
+    const matchedId = byName.get(normalizeLabelKey(documento.nombreDocumento));
+    if (matchedId) {
+      ids.add(matchedId);
+    }
+  }
+
+  return Array.from(ids);
+}
+
 function buildClientesTelefonoMap(rows: unknown): Record<number, string> {
   if (!Array.isArray(rows)) {
     return {};
@@ -791,6 +973,160 @@ function normalizeMegaLink(value: string) {
     return trimmed;
   }
   return `https://${trimmed}`;
+}
+
+function normalizeLabelKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function parseBoolean(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  return Number(value) === 1;
+}
+
+function mapDocumentoRecibidoRow(value: unknown): DocumentoRecibido | null {
+  const row = value as
+    | {
+        id?: number | string;
+        nombre_documento?: string;
+        descripcion?: string | null;
+        fecha_recepcion?: string | null;
+        tipo_documento_id?: number | string | null;
+      }
+    | null;
+
+  if (!row) {
+    return null;
+  }
+
+  const id = Number(row.id);
+  const nombreDocumento = String(row.nombre_documento ?? '').trim();
+  const fechaRecepcionRaw = row.fecha_recepcion ? String(row.fecha_recepcion) : '';
+  const fechaRecepcion = /^\d{4}-\d{2}-\d{2}$/.test(fechaRecepcionRaw)
+    ? fechaRecepcionRaw
+    : formatDateISO(new Date());
+  const descripcion =
+    typeof row.descripcion === 'string' && row.descripcion.trim().length > 0
+      ? row.descripcion.trim()
+      : null;
+
+  if (!Number.isFinite(id) || !nombreDocumento) {
+    return null;
+  }
+
+  return {
+    id,
+    nombreDocumento,
+    descripcion,
+    fechaRecepcion,
+    tipoDocumentoId:
+      row.tipo_documento_id === null || row.tipo_documento_id === undefined
+        ? null
+        : Number.isFinite(Number(row.tipo_documento_id))
+          ? Number(row.tipo_documento_id)
+          : null,
+  };
+}
+
+function mapDocumentosRecibidosRows(rows: unknown): DocumentoRecibido[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .map((row) => mapDocumentoRecibidoRow(row))
+    .filter((row): row is DocumentoRecibido => Boolean(row));
+}
+
+async function syncTipoDocumentosRecibidosForTrabajo(input: {
+  trabajoId: number;
+  selectedTipoDocumentoIds: number[];
+  tiposDocumento: TipoDocumentoItem[];
+  existingDocumentos: DocumentoRecibido[];
+}) {
+  const { trabajoId, selectedTipoDocumentoIds, tiposDocumento, existingDocumentos } = input;
+
+  if (!Number.isFinite(trabajoId)) {
+    return {
+      documentos: existingDocumentos,
+      errorMessage: 'ID de trabajo invalido.',
+    };
+  }
+
+  const selectedSet = new Set(selectedTipoDocumentoIds);
+  const existingWithTipo = existingDocumentos.filter(
+    (item) => item.tipoDocumentoId !== null && Number.isFinite(item.tipoDocumentoId)
+  );
+  const existingByTipoId = new Map<number, DocumentoRecibido>();
+
+  for (const item of existingWithTipo) {
+    if (item.tipoDocumentoId !== null) {
+      existingByTipoId.set(item.tipoDocumentoId, item);
+    }
+  }
+
+  const toDeleteIds = existingWithTipo
+    .filter((item) => item.tipoDocumentoId !== null && !selectedSet.has(item.tipoDocumentoId))
+    .map((item) => item.id)
+    .filter((id) => Number.isFinite(id) && id > 0);
+
+  if (toDeleteIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from('documentos_recibidos')
+      .delete()
+      .in('id', toDeleteIds);
+
+    if (deleteError) {
+      return {
+        documentos: existingDocumentos,
+        errorMessage: deleteError.message,
+      };
+    }
+  }
+
+  const toInsertTipoIds = selectedTipoDocumentoIds.filter((tipoId) => !existingByTipoId.has(tipoId));
+  if (toInsertTipoIds.length > 0) {
+    const payload = toInsertTipoIds.map((tipoId) => ({
+      trabajo_id: trabajoId,
+      tipo_documento_id: tipoId,
+      nombre_documento:
+        tiposDocumento.find((item) => item.id === tipoId)?.nombre ?? `Documento ${tipoId}`,
+      descripcion: null,
+      fecha_recepcion: formatDateISO(new Date()),
+    }));
+
+    const { error: insertError } = await supabase
+      .from('documentos_recibidos')
+      .insert(payload);
+
+    if (insertError) {
+      return {
+        documentos: existingDocumentos,
+        errorMessage: insertError.message,
+      };
+    }
+  }
+
+  const { data: refreshedRows, error: refreshedError } = await supabase
+    .from('documentos_recibidos')
+    .select('id,nombre_documento,descripcion,fecha_recepcion,tipo_documento_id')
+    .eq('trabajo_id', trabajoId)
+    .order('fecha_recepcion', { ascending: false })
+    .order('id', { ascending: false });
+
+  if (refreshedError) {
+    return {
+      documentos: existingDocumentos,
+      errorMessage: refreshedError.message,
+    };
+  }
+
+  return {
+    documentos: mapDocumentosRecibidosRows(refreshedRows),
+    errorMessage: null,
+  };
 }
 
 function confirmWhatsAppSend() {
@@ -930,6 +1266,60 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       gap: 8,
       flexWrap: 'wrap',
+    },
+    pagadoBlock: {
+      gap: 6,
+    },
+    pagadoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBg,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    pagadoText: {
+      color: colors.inputText,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    documentosBlock: {
+      gap: 8,
+    },
+    documentosEmptyText: {
+      color: colors.textSecondary,
+      fontSize: 13,
+    },
+    documentosChipsWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    documentoChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderRadius: 9999,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBg,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    documentoChipSelected: {
+      borderColor: colors.buttonBg,
+      backgroundColor: colors.buttonBg,
+    },
+    documentoChipText: {
+      color: colors.inputText,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    documentoChipTextSelected: {
+      color: colors.buttonText,
     },
     dateBlock: {
       gap: 6,

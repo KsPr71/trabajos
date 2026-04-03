@@ -33,6 +33,7 @@ type TrabajoItem = {
   tipoTrabajo: string;
   tipoTrabajoColor: string | null;
   enlaceDescargaMega: string | null;
+  pagado: boolean;
   fechaEntrega: string | null;
   estadoCreadoAt: string | null;
   estadoEnProcesoAt: string | null;
@@ -124,7 +125,7 @@ export default function TrabajosScreen() {
     const { data, error } = await supabase
       .from("trabajos")
       .select(
-        "id,nombre_trabajo,estado,enlace_descarga_mega,fecha_entrega,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,color)",
+        "id,nombre_trabajo,estado,pagado,enlace_descarga_mega,fecha_entrega,created_at,estado_creado_at,estado_en_proceso_at,estado_terminado_at,estado_entregado_at,clientes!trabajos_cliente_id_fkey(nombre),especialidad!trabajos_especialidad_id_fkey(nombre),tipo_trabajo!trabajos_tipo_trabajo_id_fkey(nombre,color)",
       )
       .order("created_at", { ascending: false });
 
@@ -238,6 +239,7 @@ export default function TrabajosScreen() {
                   tipoTrabajo={item.tipoTrabajo}
                   tipoTrabajoColor={item.tipoTrabajoColor}
                   enlaceDescargaMega={item.enlaceDescargaMega}
+                  pagado={item.pagado}
                   fechaEntrega={item.fechaEntrega}
                   estadoCreadoAt={item.estadoCreadoAt}
                   estadoEnProcesoAt={item.estadoEnProcesoAt}
@@ -276,6 +278,7 @@ function mapTrabajos(rows: unknown): TrabajoItem[] {
         id?: number | string;
         nombre_trabajo?: string;
         estado?: string;
+        pagado?: boolean | number | null;
         enlace_descarga_mega?: string | null;
         fecha_entrega?: string | null;
         created_at?: string;
@@ -302,6 +305,7 @@ function mapTrabajos(rows: unknown): TrabajoItem[] {
         enlaceDescargaMega: typedRow.enlace_descarga_mega
           ? String(typedRow.enlace_descarga_mega)
           : null,
+        pagado: typedRow.pagado === true || Number(typedRow.pagado) === 1,
         fechaEntrega: typedRow.fecha_entrega
           ? String(typedRow.fecha_entrega)
           : null,

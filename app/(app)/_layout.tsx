@@ -17,9 +17,11 @@ const drawerLabels: Record<string, string> = {
   perfil: "Perfil",
   clientes: "Clientes",
   "tipo-trabajo": "Tipo de trabajo",
+  "tipo-documento": "Tipo de documento",
   especialidad: "Especialidad",
   institucion: "Institucion",
   ajustes: "Ajustes",
+  acerca: "Acerca",
   "nuevo-trabajo": "Nuevo trabajo",
   "editar-trabajo": "Editar trabajo",
 };
@@ -159,6 +161,9 @@ function getDrawerIcon(routeName: string): keyof typeof Ionicons.glyphMap {
   if (routeName === "tipo-trabajo") {
     return "pricetags-outline";
   }
+  if (routeName === "tipo-documento") {
+    return "document-text-outline";
+  }
   if (routeName === "especialidad") {
     return "school-outline";
   }
@@ -167,6 +172,9 @@ function getDrawerIcon(routeName: string): keyof typeof Ionicons.glyphMap {
   }
   if (routeName === "ajustes") {
     return "settings-outline";
+  }
+  if (routeName === "acerca") {
+    return "information-circle-outline";
   }
   if (routeName === "nuevo-trabajo") {
     return "add-circle-outline";

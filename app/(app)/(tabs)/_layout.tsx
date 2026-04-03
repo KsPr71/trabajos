@@ -93,12 +93,12 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="acerca"
+        name="historial-precios"
         options={{
-          title: "Acerca",
+          title: "Precios",
           tabBarIcon: ({ color, size }) => (
             <Ionicons
-              name="information-circle-outline"
+              name="stats-chart-outline"
               size={size}
               color={color}
             />

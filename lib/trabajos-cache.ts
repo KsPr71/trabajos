@@ -1,5 +1,13 @@
 import * as SQLite from 'expo-sqlite';
 
+export type CachedDocumentoRecibido = {
+  id: number;
+  nombreDocumento: string;
+  descripcion: string | null;
+  fechaRecepcion: string;
+  tipoDocumentoId: number | null;
+};
+
 export type CachedTrabajo = {
   id: number;
   nombreTrabajo: string;
@@ -13,6 +21,7 @@ export type CachedTrabajo = {
   estadoEnProcesoAt: string | null;
   estadoTerminadoAt: string | null;
   estadoEntregadoAt: string | null;
+  pagado: boolean;
   estado: 'creado' | 'en_proceso' | 'terminado' | 'entregado';
   updatedAt: string;
 };
@@ -32,6 +41,8 @@ export type CachedTrabajoDetalle = {
   estadoEnProcesoAt: string | null;
   estadoTerminadoAt: string | null;
   estadoEntregadoAt: string | null;
+  pagado: boolean;
+  documentosRecibidos: CachedDocumentoRecibido[];
   updatedAt: string;
 };
 
@@ -70,6 +81,7 @@ async function ensureSchema() {
         estado_en_proceso_at text,
         estado_terminado_at text,
         estado_entregado_at text,
+        pagado integer not null default 0,
         estado text not null,
         updated_at text not null
       )`
@@ -83,6 +95,7 @@ async function ensureSchema() {
     await ensureColumn(db, 'trabajos_cache', 'estado_en_proceso_at');
     await ensureColumn(db, 'trabajos_cache', 'estado_terminado_at');
     await ensureColumn(db, 'trabajos_cache', 'estado_entregado_at');
+    await ensureColumn(db, 'trabajos_cache', 'pagado');
 
     await db.runAsync(
       `create table if not exists cache_meta (
@@ -107,10 +120,14 @@ async function ensureSchema() {
         estado_en_proceso_at text,
         estado_terminado_at text,
         estado_entregado_at text,
+        pagado integer not null default 0,
+        documentos_recibidos_json text,
         updated_at text not null
       )`
     );
     await ensureColumn(db, 'trabajos_detalle_cache', 'enlace_descarga_mega');
+    await ensureColumn(db, 'trabajos_detalle_cache', 'pagado');
+    await ensureColumn(db, 'trabajos_detalle_cache', 'documentos_recibidos_json');
 
     initialized = true;
   })();
@@ -134,6 +151,8 @@ async function ensureColumn(
     | 'estado_en_proceso_at'
     | 'estado_terminado_at'
     | 'estado_entregado_at'
+    | 'pagado'
+    | 'documentos_recibidos_json'
 ) {
   const columns = await db.getAllAsync<{ name: string }>(`pragma table_info(${tableName})`);
   const exists = columns.some((column) => column.name === columnName);
@@ -161,6 +180,16 @@ async function ensureColumn(
     return;
   }
 
+  if (columnName === 'pagado') {
+    await db.runAsync(`alter table ${tableName} add column pagado integer not null default 0`);
+    return;
+  }
+
+  if (columnName === 'documentos_recibidos_json') {
+    await db.runAsync(`alter table ${tableName} add column documentos_recibidos_json text`);
+    return;
+  }
+
   await db.runAsync(`alter table ${tableName} add column ${columnName} text`);
 }
 
@@ -181,11 +210,12 @@ export async function getCachedTrabajos(): Promise<CachedTrabajo[]> {
     estado_en_proceso_at: string | null;
     estado_terminado_at: string | null;
     estado_entregado_at: string | null;
+    pagado: number | null;
     estado: string;
     updated_at: string;
   }>(
     `select id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, enlace_descarga_mega, fecha_entrega,
-            estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at,
+            estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at, pagado,
             estado, updated_at
      from trabajos_cache
      order by updated_at desc, id desc`
@@ -204,6 +234,7 @@ export async function getCachedTrabajos(): Promise<CachedTrabajo[]> {
     estadoEnProcesoAt: row.estado_en_proceso_at ?? null,
     estadoTerminadoAt: row.estado_terminado_at ?? null,
     estadoEntregadoAt: row.estado_entregado_at ?? null,
+    pagado: parseBoolean(row.pagado),
     estado: parseEstado(row.estado),
     updatedAt: row.updated_at,
   }));
@@ -223,9 +254,9 @@ export async function replaceCachedTrabajos(trabajos: CachedTrabajo[]): Promise<
           `insert into trabajos_cache (
              id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, enlace_descarga_mega, fecha_entrega,
              estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at,
-             estado, updated_at
+             pagado, estado, updated_at
            )
-           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             trabajo.id,
             trabajo.nombreTrabajo,
@@ -239,6 +270,7 @@ export async function replaceCachedTrabajos(trabajos: CachedTrabajo[]): Promise<
             trabajo.estadoEnProcesoAt ?? null,
             trabajo.estadoTerminadoAt ?? null,
             trabajo.estadoEntregadoAt ?? null,
+            trabajo.pagado ? 1 : 0,
             trabajo.estado,
             trabajo.updatedAt || now,
           ]
@@ -265,9 +297,9 @@ export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void>
       `insert into trabajos_cache (
          id, nombre_trabajo, autor, especialidad, tipo_trabajo, tipo_trabajo_color, enlace_descarga_mega, fecha_entrega,
          estado_creado_at, estado_en_proceso_at, estado_terminado_at, estado_entregado_at,
-         estado, updated_at
+         pagado, estado, updated_at
        )
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(id) do update set
          nombre_trabajo = excluded.nombre_trabajo,
          autor = excluded.autor,
@@ -280,6 +312,7 @@ export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void>
          estado_en_proceso_at = excluded.estado_en_proceso_at,
          estado_terminado_at = excluded.estado_terminado_at,
          estado_entregado_at = excluded.estado_entregado_at,
+         pagado = excluded.pagado,
          estado = excluded.estado,
          updated_at = excluded.updated_at`,
       [
@@ -295,6 +328,7 @@ export async function upsertCachedTrabajo(trabajo: CachedTrabajo): Promise<void>
         trabajo.estadoEnProcesoAt ?? null,
         trabajo.estadoTerminadoAt ?? null,
         trabajo.estadoEntregadoAt ?? null,
+        trabajo.pagado ? 1 : 0,
         trabajo.estado,
         trabajo.updatedAt || new Date().toISOString(),
       ]
@@ -334,11 +368,13 @@ export async function getCachedTrabajoDetalleById(
     estado_en_proceso_at: string | null;
     estado_terminado_at: string | null;
     estado_entregado_at: string | null;
+    pagado: number | null;
+    documentos_recibidos_json: string | null;
     updated_at: string;
   }>(
     `select id, nombre_trabajo, tipo_trabajo_id, cliente_id, especialidad_id, institucion_id, enlace_descarga_mega,
             fecha_recibido, fecha_entrega, estado, estado_creado_at, estado_en_proceso_at,
-            estado_terminado_at, estado_entregado_at, updated_at
+            estado_terminado_at, estado_entregado_at, pagado, documentos_recibidos_json, updated_at
      from trabajos_detalle_cache
      where id = ?`,
     [trabajoId]
@@ -363,6 +399,8 @@ export async function getCachedTrabajoDetalleById(
     estadoEnProcesoAt: row.estado_en_proceso_at ?? null,
     estadoTerminadoAt: row.estado_terminado_at ?? null,
     estadoEntregadoAt: row.estado_entregado_at ?? null,
+    pagado: parseBoolean(row.pagado),
+    documentosRecibidos: parseDocumentosRecibidos(row.documentos_recibidos_json),
     updatedAt: row.updated_at,
   };
 }
@@ -379,9 +417,9 @@ export async function upsertCachedTrabajoDetalle(
          id, nombre_trabajo, tipo_trabajo_id, cliente_id, especialidad_id, institucion_id,
          enlace_descarga_mega,
          fecha_recibido, fecha_entrega, estado, estado_creado_at, estado_en_proceso_at,
-         estado_terminado_at, estado_entregado_at, updated_at
+         estado_terminado_at, estado_entregado_at, pagado, documentos_recibidos_json, updated_at
        )
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(id) do update set
          nombre_trabajo = excluded.nombre_trabajo,
          tipo_trabajo_id = excluded.tipo_trabajo_id,
@@ -396,6 +434,8 @@ export async function upsertCachedTrabajoDetalle(
          estado_en_proceso_at = excluded.estado_en_proceso_at,
          estado_terminado_at = excluded.estado_terminado_at,
          estado_entregado_at = excluded.estado_entregado_at,
+         pagado = excluded.pagado,
+         documentos_recibidos_json = excluded.documentos_recibidos_json,
          updated_at = excluded.updated_at`,
       [
         detalle.id,
@@ -412,6 +452,8 @@ export async function upsertCachedTrabajoDetalle(
         detalle.estadoEnProcesoAt ?? null,
         detalle.estadoTerminadoAt ?? null,
         detalle.estadoEntregadoAt ?? null,
+        detalle.pagado ? 1 : 0,
+        JSON.stringify(normalizeDocumentosRecibidos(detalle.documentosRecibidos)),
         detalle.updatedAt || new Date().toISOString(),
       ]
     );
@@ -453,4 +495,67 @@ function parseEstado(rawValue: unknown): 'creado' | 'en_proceso' | 'terminado' |
     return 'terminado';
   }
   return 'creado';
+}
+
+function parseBoolean(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  return Number(value) === 1;
+}
+
+function parseDocumentosRecibidos(rawValue: string | null | undefined): CachedDocumentoRecibido[] {
+  if (!rawValue) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return normalizeDocumentosRecibidos(parsed);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeDocumentosRecibidos(value: unknown): CachedDocumentoRecibido[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      const typed = item as {
+        id?: number | string;
+        nombreDocumento?: string;
+        descripcion?: string | null;
+        fechaRecepcion?: string;
+        tipoDocumentoId?: number | string | null;
+      };
+
+      return {
+        id: Number(typed.id),
+        nombreDocumento: String(typed.nombreDocumento ?? '').trim(),
+        descripcion:
+          typeof typed.descripcion === 'string' && typed.descripcion.trim().length > 0
+            ? typed.descripcion.trim()
+            : null,
+        fechaRecepcion: String(typed.fechaRecepcion ?? ''),
+        tipoDocumentoId:
+          typed.tipoDocumentoId === null || typed.tipoDocumentoId === undefined
+            ? null
+            : Number.isFinite(Number(typed.tipoDocumentoId))
+              ? Number(typed.tipoDocumentoId)
+              : null,
+      };
+    })
+    .filter(
+      (item) =>
+        Number.isFinite(item.id) &&
+        item.nombreDocumento.length > 0 &&
+        /^\d{4}-\d{2}-\d{2}$/.test(item.fechaRecepcion)
+    );
 }
