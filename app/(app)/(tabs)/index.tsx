@@ -41,6 +41,12 @@ type GananciasResumen = {
   total: number;
 };
 
+type RendimientoResumen = {
+  totalPeriodo: number;
+  diasPeriodo: number;
+  diario: number;
+};
+
 type DashboardPayload = {
   resumenPorTipo: ResumenTipoEstado[];
   ganancias: GananciasResumen;
@@ -145,6 +151,15 @@ export default function DashboardScreen() {
 
   const { resumenPorTipo, ganancias, gananciasPorMes } =
     filteredDashboardPayload;
+  const rendimiento = useMemo(
+    () =>
+      buildRendimientoResumen(
+        ganancias.total,
+        selectedRange.start,
+        selectedRange.endInclusive,
+      ),
+    [ganancias.total, selectedRange.endInclusive, selectedRange.start],
+  );
 
   const loadResumen = useCallback(async () => {
     setLoading(true);
@@ -480,6 +495,47 @@ export default function DashboardScreen() {
               <Text style={styles.moneyTotalLabel}>Total</Text>
               <Text style={[styles.moneyValue, styles.moneyTotalValue]}>
                 {formatMoney(ganancias.total)}
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Rendimiento</Text>
+        <Text style={styles.sectionSubtitle}>
+          Promedio diario del dinero generado en el periodo seleccionado.
+        </Text>
+
+        {loading ? (
+          <View style={styles.stateBox}>
+            <ActivityIndicator color={colors.buttonBg} />
+            <Text style={styles.stateText}>Calculando rendimiento...</Text>
+          </View>
+        ) : errorMessage ? (
+          <View style={styles.stateBox}>
+            <Text style={styles.stateText}>
+              Error calculando rendimiento: {errorMessage}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.moneyWrap}>
+            <View style={styles.moneyRow}>
+              <Text style={styles.moneyLabel}>Total generado (periodo)</Text>
+              <Text style={[styles.moneyValue, styles.moneyReceived]}>
+                {formatMoney(rendimiento.totalPeriodo)}
+              </Text>
+            </View>
+            <View style={styles.moneyRow}>
+              <Text style={styles.moneyLabel}>Dias del periodo</Text>
+              <Text style={[styles.moneyValue, styles.moneyExpected]}>
+                {rendimiento.diasPeriodo}
+              </Text>
+            </View>
+            <View style={[styles.moneyRow, styles.moneyTotalRow]}>
+              <Text style={styles.moneyTotalLabel}>Rendimiento diario</Text>
+              <Text style={[styles.moneyValue, styles.moneyTotalValue]}>
+                {formatMoney(rendimiento.diario)}
               </Text>
             </View>
           </View>
@@ -1059,6 +1115,39 @@ function formatMoney(value: number) {
   );
   const sign = value < 0 ? "-" : "";
   return `${sign}$${integerWithSeparator},${decimalPart}`;
+}
+
+function buildRendimientoResumen(
+  totalPeriodo: number,
+  start: Date,
+  endInclusive: Date,
+): RendimientoResumen {
+  const diasPeriodo = getElapsedInclusiveDays(start, endInclusive);
+  return {
+    totalPeriodo,
+    diasPeriodo,
+    diario: diasPeriodo > 0 ? totalPeriodo / diasPeriodo : 0,
+  };
+}
+
+function getInclusiveDays(start: Date, endInclusive: Date) {
+  const normalizedStart = startOfDay(start);
+  const normalizedEnd = startOfDay(endInclusive);
+  const diff = getDaysDiff(normalizedStart, normalizedEnd);
+  return Math.max(diff + 1, 1);
+}
+
+function getElapsedInclusiveDays(start: Date, endInclusive: Date) {
+  const today = startOfDay(new Date());
+  const normalizedStart = startOfDay(start);
+  const normalizedEnd = startOfDay(endInclusive);
+  const effectiveEnd = normalizedEnd < today ? normalizedEnd : today;
+
+  if (effectiveEnd < normalizedStart) {
+    return 0;
+  }
+
+  return getInclusiveDays(normalizedStart, effectiveEnd);
 }
 
 function buildGananciasPorMes(rows: unknown): GananciaMensualItem[] {
