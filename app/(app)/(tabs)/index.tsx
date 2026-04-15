@@ -1058,13 +1058,12 @@ function buildGanancias(rows: unknown): GananciasResumen {
     };
 
     const estado = parseEstado(typedRow.estado);
+    const precioTrabajo = getTrabajoPrecio(typedRow);
 
     if (estado === "entregado") {
-      const precioAplicado = parsePrecioNullable(typedRow.precio_aplicado);
-      recibidas +=
-        precioAplicado ?? getTipoTrabajoPrecio(typedRow.tipo_trabajo);
+      recibidas += precioTrabajo;
     } else {
-      esperadas += getTipoTrabajoPrecio(typedRow.tipo_trabajo);
+      esperadas += precioTrabajo;
     }
   }
 
@@ -1085,6 +1084,17 @@ function getTipoTrabajoPrecio(value: unknown) {
     return parsePrecio(record.precio);
   }
   return 0;
+}
+
+function getTrabajoPrecio(row: {
+  precio_aplicado?: unknown;
+  tipo_trabajo?: unknown;
+}) {
+  const precioAplicado = parsePrecioNullable(row.precio_aplicado);
+  if (precioAplicado !== null) {
+    return precioAplicado;
+  }
+  return getTipoTrabajoPrecio(row.tipo_trabajo);
 }
 
 function parsePrecio(value: unknown) {
@@ -1188,6 +1198,7 @@ function buildGananciasPorMes(rows: unknown): GananciaMensualItem[] {
     const key = `${year}-${String(month + 1).padStart(2, "0")}`;
     const mesLabel = `${MONTH_NAMES_ES[month]} ${year}`;
     const estado = parseEstado(typedRow.estado);
+    const precioTrabajo = getTrabajoPrecio(typedRow);
 
     const current = grouped.get(key) ?? {
       key,
@@ -1198,11 +1209,9 @@ function buildGananciasPorMes(rows: unknown): GananciaMensualItem[] {
     };
 
     if (estado === "entregado") {
-      const precioAplicado = parsePrecioNullable(typedRow.precio_aplicado);
-      current.recibidas +=
-        precioAplicado ?? getTipoTrabajoPrecio(typedRow.tipo_trabajo);
+      current.recibidas += precioTrabajo;
     } else {
-      current.esperadas += getTipoTrabajoPrecio(typedRow.tipo_trabajo);
+      current.esperadas += precioTrabajo;
     }
 
     current.total = current.esperadas + current.recibidas;

@@ -1,9 +1,13 @@
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   LayoutChangeEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +25,8 @@ import { supabase } from "@/lib/supabase";
 import { openWhatsAppChat } from "@/lib/whatsapp";
 import { useAppTheme } from "@/providers/theme-provider";
 import { useToast } from "@/providers/toast-provider";
+
+type BirthDatePickerTarget = "create" | "edit" | null;
 
 export default function ClientesScreen() {
   const { colors } = useAppTheme();
@@ -52,6 +58,8 @@ export default function ClientesScreen() {
   const [searchText, setSearchText] = useState("");
   const [formExpanded, setFormExpanded] = useState(false);
   const [searchBarWidth, setSearchBarWidth] = useState(0);
+  const [birthDatePickerTarget, setBirthDatePickerTarget] =
+    useState<BirthDatePickerTarget>(null);
 
   const filteredClientes = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -119,19 +127,39 @@ export default function ClientesScreen() {
     }, [loadClientesRegistrados]),
   );
 
+  const handleBirthDateChange = useCallback(
+    (event: DateTimePickerEvent, selectedDate?: Date) => {
+      if (event.type === "dismissed") {
+        setBirthDatePickerTarget(null);
+        return;
+      }
+
+      if (!selectedDate || !birthDatePickerTarget) {
+        return;
+      }
+
+      const formattedDate = formatDateISO(selectedDate);
+      if (birthDatePickerTarget === "create") {
+        setFechaNacimiento(formattedDate);
+      } else {
+        setEditFechaNacimiento(formattedDate);
+      }
+
+      if (Platform.OS !== "ios") {
+        setBirthDatePickerTarget(null);
+      }
+    },
+    [birthDatePickerTarget],
+  );
+
   const handleCreate = async () => {
     const cleanNombre = nombre.trim();
-    const cleanFecha = fechaNacimiento.trim();
+    const cleanFecha = normalizeOptionalDateString(fechaNacimiento);
     const cleanDireccion = direccion.trim();
     const cleanTelefono = telefono.trim();
 
     if (!cleanNombre) {
       setMessage("El nombre es obligatorio.");
-      return;
-    }
-
-    if (cleanFecha && !/^\d{4}-\d{2}-\d{2}$/.test(cleanFecha)) {
-      setMessage("Fecha invalida. Usa formato YYYY-MM-DD.");
       return;
     }
 
@@ -204,16 +232,12 @@ export default function ClientesScreen() {
     }
 
     const cleanNombre = editNombre.trim();
-    const cleanFecha = editFechaNacimiento.trim();
+    const cleanFecha = normalizeOptionalDateString(editFechaNacimiento);
     const cleanDireccion = editDireccion.trim();
     const cleanTelefono = editTelefono.trim();
 
     if (!cleanNombre) {
       setMessage("El nombre es obligatorio para editar.");
-      return;
-    }
-    if (cleanFecha && !/^\d{4}-\d{2}-\d{2}$/.test(cleanFecha)) {
-      setMessage("Fecha invalida en edicion. Usa formato YYYY-MM-DD.");
       return;
     }
 
@@ -325,13 +349,25 @@ export default function ClientesScreen() {
                 value={nombre}
                 onChangeText={setNombre}
               />
-              <TextInput
-                placeholder="Fecha de nacimiento (YYYY-MM-DD)"
-                placeholderTextColor={colors.inputPlaceholder}
-                style={styles.input}
-                value={fechaNacimiento}
-                onChangeText={setFechaNacimiento}
-              />
+              <View style={styles.dateBlock}>
+                <Text style={styles.label}>Fecha de nacimiento</Text>
+                <Pressable
+                  onPress={() => setBirthDatePickerTarget("create")}
+                  style={styles.dateButton}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {formatBirthDateDisplay(fechaNacimiento)}
+                  </Text>
+                </Pressable>
+                {fechaNacimiento ? (
+                  <Pressable
+                    onPress={() => setFechaNacimiento("")}
+                    style={styles.clearDateButton}
+                  >
+                    <Text style={styles.clearDateButtonText}>Quitar fecha</Text>
+                  </Pressable>
+                ) : null}
+              </View>
               <TextInput
                 placeholder="Direccion"
                 placeholderTextColor={colors.inputPlaceholder}
@@ -363,6 +399,44 @@ export default function ClientesScreen() {
         </View>
 
         {message ? <Text style={styles.message}>{message}</Text> : null}
+
+        {birthDatePickerTarget ? (
+          <View style={styles.pickerContainer}>
+            <DateTimePicker
+              value={getPickerDateValue(
+                birthDatePickerTarget === "create"
+                  ? fechaNacimiento
+                  : editFechaNacimiento,
+              )}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={handleBirthDateChange}
+            />
+            {Platform.OS === "ios" ? (
+              <View style={styles.pickerActions}>
+                <Pressable
+                  onPress={() => {
+                    if (birthDatePickerTarget === "create") {
+                      setFechaNacimiento("");
+                    } else {
+                      setEditFechaNacimiento("");
+                    }
+                    setBirthDatePickerTarget(null);
+                  }}
+                  style={styles.clearDateButton}
+                >
+                  <Text style={styles.clearDateButtonText}>Quitar fecha</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setBirthDatePickerTarget(null)}
+                  style={styles.clearDateButton}
+                >
+                  <Text style={styles.clearDateButtonText}>Listo</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         <View style={styles.listSection}>
           <Text style={styles.listTitle}>Clientes registrados</Text>
@@ -397,13 +471,27 @@ export default function ClientesScreen() {
                         value={editNombre}
                         onChangeText={setEditNombre}
                       />
-                      <TextInput
-                        placeholder="Fecha nacimiento (YYYY-MM-DD)"
-                        placeholderTextColor={colors.inputPlaceholder}
-                        style={styles.editInput}
-                        value={editFechaNacimiento}
-                        onChangeText={setEditFechaNacimiento}
-                      />
+                      <View style={styles.dateBlock}>
+                        <Text style={styles.label}>Fecha de nacimiento</Text>
+                        <Pressable
+                          onPress={() => setBirthDatePickerTarget("edit")}
+                          style={styles.dateButton}
+                        >
+                          <Text style={styles.dateButtonText}>
+                            {formatBirthDateDisplay(editFechaNacimiento)}
+                          </Text>
+                        </Pressable>
+                        {editFechaNacimiento ? (
+                          <Pressable
+                            onPress={() => setEditFechaNacimiento("")}
+                            style={styles.clearDateButton}
+                          >
+                            <Text style={styles.clearDateButtonText}>
+                              Quitar fecha
+                            </Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
                       <TextInput
                         placeholder="Direccion"
                         placeholderTextColor={colors.inputPlaceholder}
@@ -444,7 +532,17 @@ export default function ClientesScreen() {
                     <>
                       <Text style={styles.listItemName}>{cliente.nombre}</Text>
                       <Text style={styles.listItemMeta}>
+                        Telefono:{" "}
                         {cliente.telefono ? cliente.telefono : "Sin telefono"}
+                      </Text>
+                      <Text style={styles.listItemMeta}>
+                        Edad: {getEdadLabel(cliente.fechaNacimiento)}
+                      </Text>
+                      <Text style={styles.listItemMeta}>
+                        Direccion:{" "}
+                        {cliente.direccion?.trim()
+                          ? cliente.direccion
+                          : "Sin direccion"}
                       </Text>
                       <View style={styles.itemActionsRow}>
                         <Pressable
@@ -540,6 +638,11 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       color: colors.textSecondary,
       marginTop: 2,
     },
+    label: {
+      color: colors.textPrimary,
+      fontSize: 13,
+      fontWeight: "700",
+    },
     input: {
       backgroundColor: colors.inputBg,
       borderRadius: 12,
@@ -628,6 +731,36 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
     editWrap: {
       gap: 8,
     },
+    dateBlock: {
+      gap: 8,
+    },
+    dateButton: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.inputBg,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    dateButtonText: {
+      color: colors.inputText,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    clearDateButton: {
+      alignSelf: "flex-start",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.card,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    clearDateButtonText: {
+      color: colors.textPrimary,
+      fontSize: 12,
+      fontWeight: "700",
+    },
     editInput: {
       backgroundColor: colors.card,
       borderRadius: 10,
@@ -671,6 +804,19 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       fontSize: 13,
       fontWeight: "700",
     },
+    pickerContainer: {
+      gap: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      backgroundColor: colors.inputBg,
+      padding: 12,
+    },
+    pickerActions: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: 8,
+    },
     itemActionsRow: {
       marginTop: 6,
       flexDirection: "row",
@@ -696,4 +842,98 @@ function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
       fontWeight: "700",
     },
   });
+}
+
+function getEdadLabel(fechaNacimiento: string | null) {
+  if (!fechaNacimiento) {
+    return "No disponible";
+  }
+
+  const edad = getEdadFromFechaNacimiento(fechaNacimiento);
+  if (edad === null) {
+    return "No disponible";
+  }
+
+  if (edad === 1) {
+    return "1 ano";
+  }
+
+  return `${edad} anos`;
+}
+
+function normalizeOptionalDateString(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = parseDateOnly(trimmed);
+  if (!parsed) {
+    return null;
+  }
+
+  return formatDateISO(parsed);
+}
+
+function getPickerDateValue(value: string) {
+  return parseDateOnly(value) ?? new Date();
+}
+
+function formatBirthDateDisplay(value: string) {
+  const parsed = parseDateOnly(value);
+  if (!parsed) {
+    return "Seleccionar fecha";
+  }
+
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const year = parsed.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function formatDateISO(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getEdadFromFechaNacimiento(fechaNacimiento: string) {
+  const birthDate = parseDateOnly(fechaNacimiento);
+  if (!birthDate) {
+    return null;
+  }
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  const dayDiff = today.getDate() - birthDate.getDate();
+
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+
+  if (age < 0) {
+    return null;
+  }
+
+  return age;
+}
+
+function parseDateOnly(value: string) {
+  const [year, month, day] = value.split("-").map((part) => Number(part));
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  const parsed = new Date(year, month - 1, day);
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
 }
